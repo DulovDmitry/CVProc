@@ -12,6 +12,8 @@
 #include <QSettings>
 #include <QRegularExpression>
 
+#include "generalsettingsdialog.h"
+
 #include <iostream>
 #include <math.h>
 #include <Eigen/Dense>
@@ -75,7 +77,7 @@ public:
 
     // complex methods (public):
     void processFileBody();
-    bool convolute();
+    bool convolute(int Ru, int Cd);
     QString exportParametersAsText();
     void SavGolFilter(int m, int pol_order, PlotType);
     void changeFileName(QString newFileName);
@@ -87,10 +89,11 @@ signals:
      void progressWasChanged(int progress);
 
 private:
+     QSettings *settings;
 
     // complex methods (private):
     void initializeParameters();
-    void correctTime();
+    void correctTime(); // deprecated?
     QVector<double> vectorWithCoefsForSavGolFilter(int m, int pol_order);
     int getDataBeginnigStringNumber();
 
@@ -119,8 +122,6 @@ private:
     double curveMargin;
     double Ru;
     double mScanRate; // V/s
-
-    QSettings *settings;
 
     // flags:
     bool mEIsAvaliable;

@@ -79,6 +79,20 @@
          <enum>QLayout::SetDefaultConstraint</enum>
         </property>
         <item>
+         <widget class="QPushButton" name="DefaultViewButton">
+          <property name="text">
+           <string>Default view</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="Line" name="line">
+          <property name="orientation">
+           <enum>Qt::Vertical</enum>
+          </property>
+         </widget>
+        </item>
+        <item>
          <widget class="QPushButton" name="SelectionButton">
           <property name="text">
            <string>Selection</string>
@@ -109,9 +123,19 @@
          </widget>
         </item>
         <item>
-         <widget class="QPushButton" name="DefaultViewButton">
+         <widget class="QPushButton" name="CrossButton">
           <property name="text">
-           <string>Default view</string>
+           <string>Cross</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="Line" name="line_2">
+          <property name="frameShadow">
+           <enum>QFrame::Sunken</enum>
+          </property>
+          <property name="orientation">
+           <enum>Qt::Vertical</enum>
           </property>
          </widget>
         </item>
@@ -130,16 +154,16 @@
          </widget>
         </item>
         <item>
-         <widget class="QPushButton" name="CrossButton">
+         <widget class="QPushButton" name="DeleteDataButton">
           <property name="text">
-           <string>Cross</string>
+           <string>Delete data</string>
           </property>
          </widget>
         </item>
         <item>
-         <widget class="QPushButton" name="DeleteDataButton">
+         <widget class="QPushButton" name="AnalyzePeakButton">
           <property name="text">
-           <string>Delete data</string>
+           <string>Analyze peak</string>
           </property>
          </widget>
         </item>

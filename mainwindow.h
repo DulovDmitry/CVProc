@@ -27,10 +27,6 @@ public:
 
 private slots:
 
-    void on_actionImport_ASCII_triggered();
-
-    void SavGolFilterApply(int m, int pol_order);
-
     // settings control:
     void saveSettings();
     void loadSettings();
@@ -45,9 +41,11 @@ private slots:
     void updateFileNamesListFromTreeWidget();
     void progressBarUpdate(int progress);
 
-    // Context menus control
+    // Plot context menu control
     void initializePlotContextMenu();
     void plotContextMenuRequested(QPoint pos);
+
+    // Tree widget context menu control
     void initializeTreeContextMenu();
     void treeContextMenuRequested(QPoint pos);
 
@@ -59,6 +57,7 @@ private slots:
     void deactivateAllControlButtons();
     void on_ConvolutionButton_clicked();
     void on_SmoothButton_clicked();
+    void on_CrossButton_clicked();
 
     // graph control:
     void drawPlot(CVCurveData *CVData, QString plotType);
@@ -74,39 +73,43 @@ private slots:
     void savePlotAsPNG();
     void exportPlotAsTXT();
 
-    void smoothSettingsDialogWasClosed(bool buttonType);
-
+    // Menubar slots
     void on_actionSettings_triggered();
-
-
     void on_actionConvolute_all_triggered();
-
     void on_actionSmooth_all_I_vs_E_triggered();
+    void on_actionImport_ASCII_triggered();
 
-
-
-    void on_CrossButton_clicked();
+    // Other methods and slots
+    void SavGolFilterApply(int m, int pol_order);
+    void convolutionApply(int Ru, int Cd);
+    void smoothSettingsDialogWasClosed(bool buttonType);
 
 private:
     Ui::MainWindow *ui;
-    QCustomPlot *customPlot;
-    QCPCurve *curvePlot;
-    QCPCurve *smoothedCurvePlot;
-    QCPSelectionRect *selectionRect;
     QVector<CVCurveData*> *CVCurves;
     QSettings *settings;
 
     QString fileNameBuffer;
     QStringList fileNamesListFromTreeWidget;
 
+    // Flags
     bool currentItemChangedSlot_deactivator = false;
     bool mouseIsPressedOnGraph = false;
 
-    // Cross for graph
+    // QCustomPlot
+    QCustomPlot *customPlot;
+    QCPCurve *curvePlot;
+    QCPCurve *smoothedCurvePlot;
+    QCPSelectionRect *selectionRect;
+
+    // Items for graph
     QCPItemStraightLine *cross_1_vert;
     QCPItemStraightLine *cross_1_hor;
     QCPItemStraightLine *cross_2_vert;
     QCPItemStraightLine *cross_2_hor;
+    QCPItemText *deltaXlabel;
+    QCPItemText *deltaYlabel;
+    QPointF cross_1_coordinates;
 
     // additional dialogs
     GeneralSettingsDialog *generalSettingsDialog;

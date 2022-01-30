@@ -18,6 +18,7 @@ MainWindow::MainWindow(QWidget *parent)
     ui->spinBox_numberOfCycle->setEnabled(false);
     ui->CrossButton->setCheckable(true);
     ui->DeleteDataButton->setEnabled(false);
+    ui->AnalyzePeakButton->setEnabled(false);
     ui->progressBar->setStyleSheet("QProgressBar {border: 2px solid grey; border-radius: 10px; text-align: center;}");
     ui->progressBar->setStyleSheet("QProgressBar::chunk {background-color: #05B8CC; width: 1px;}");
 
@@ -37,6 +38,9 @@ MainWindow::MainWindow(QWidget *parent)
 
     // Dialog for convolution's settings configuration
     convolutionSettingsDialog = new ConvolutionSettingsDialog(this);
+    smoothSettingsDialog->setWindowModality(Qt::WindowModal);
+    connect(convolutionSettingsDialog, SIGNAL(okButtonClicked(int,int)),
+            this, SLOT(convolutionApply(int,int)));
 
     // plot preferences
     customPlot = new QCustomPlot(this);
@@ -50,7 +54,7 @@ MainWindow::MainWindow(QWidget *parent)
     customPlot->setContextMenuPolicy(Qt::CustomContextMenu);
     customPlot->setInteraction(QCP::iSelectPlottables);
     selectionRect = new QCPSelectionRect(customPlot);
-    //selectionRect->setVisible(false);
+    selectionRect->setVisible(false);
 
     // curves preferences
     curvePlot = new QCPCurve(customPlot->xAxis, customPlot->yAxis);
@@ -81,6 +85,8 @@ MainWindow::MainWindow(QWidget *parent)
     cross_1_vert->point2->setCoords(0, 1);
     cross_1_hor->point1->setCoords(0, 0);
     cross_1_hor->point2->setCoords(1, 0);
+    cross_1_vert->setVisible(false);
+    cross_1_hor->setVisible(false);
     cross_2_vert = new QCPItemStraightLine(customPlot);
     cross_2_hor = new QCPItemStraightLine(customPlot);
     cross_2_vert->setPen(QPen(QColor(255,0,0)));
@@ -89,6 +95,24 @@ MainWindow::MainWindow(QWidget *parent)
     cross_2_vert->point2->setCoords(0, 1);
     cross_2_hor->point1->setCoords(0, 0);
     cross_2_hor->point2->setCoords(1, 0);
+    cross_2_vert->setVisible(false);
+    cross_2_hor->setVisible(false);
+
+    // Text items for graph
+    deltaXlabel = new QCPItemText(customPlot);
+    deltaXlabel->setVisible(false);
+    deltaXlabel->position->setType(QCPItemPosition::ptAxisRectRatio);
+    deltaXlabel->position->setCoords(0.02, 0.05);
+    deltaXlabel->setPositionAlignment(Qt::AlignLeft | Qt::AlignBottom);
+    deltaXlabel->setTextAlignment(Qt::AlignLeft);
+    deltaXlabel->setFont(QFont(generalSettingsDialog->axisFontFamily, 12));
+    deltaYlabel = new QCPItemText(customPlot);
+    deltaYlabel->setVisible(false);
+    deltaYlabel->position->setType(QCPItemPosition::ptAxisRectRatio);
+    deltaYlabel->position->setCoords(0.02, 0.1);
+    deltaYlabel->setPositionAlignment(Qt::AlignLeft | Qt::AlignBottom);
+    deltaYlabel->setTextAlignment(Qt::AlignLeft);
+    deltaYlabel->setFont(QFont(generalSettingsDialog->axisFontFamily, 12));
 
     // treeWidget preferences
     ui->treeWidget->setColumnCount(2);
@@ -298,6 +322,39 @@ void MainWindow::SavGolFilterApply(int m, int pol_order)
     }
 }
 
+void MainWindow::convolutionApply(int Ru, int Cd)
+{
+    QTreeWidgetItem *newChild_si = new QTreeWidgetItem();
+    newChild_si->setText(0, CVCurveData::PlotTypes.at(CVCurveData::I_vs_E_semiint));
+    QTreeWidgetItem *newChild_sd = new QTreeWidgetItem();
+    newChild_sd->setText(0, CVCurveData::PlotTypes.at(CVCurveData::I_vs_E_semidiff));
+
+    QTreeWidgetItem *currentItem = ui->treeWidget->currentItem();
+    if (!currentItem->childCount())
+        currentItem = currentItem->parent();
+
+    for (QVector<CVCurveData*>::iterator it = CVCurves->begin(); it != CVCurves->end(); it++)
+    {
+        if (currentItem->text(0) == (*it)->fileName())
+        {
+            if ((*it)->convolute(Ru, Cd))
+            {
+                currentItem->addChild(newChild_si);
+                currentItem->addChild(newChild_sd);
+                ui->treeWidget->currentItem()->setSelected(false);
+                currentItem->setExpanded(true);
+                newChild_sd->setSelected(true);
+                ui->treeWidget->setCurrentItem(newChild_sd);
+                ui->treeWidget->setFocus();
+                drawPlot(*it, CVCurveData::PlotTypes.at(CVCurveData::I_vs_E_semidiff));
+            }
+            else
+                QMessageBox::warning(this, "", "Something went wrong!");
+            break;
+        }
+    }
+}
+
 void MainWindow::saveSettings()
 {
     settings->setValue("LAST_SAVE_DIR", lastSaveDir);
@@ -312,11 +369,16 @@ void MainWindow::loadSettings()
 
 void MainWindow::on_DragAndDropButton_clicked()
 {
-    deactivateAllControlButtons();
-    ui->DragAndDropButton->setChecked(true);
+    if (ui->DragAndDropButton->isChecked())
+    {
+        deactivateAllControlButtons();
+        ui->DragAndDropButton->setChecked(true);
 
-    customPlot->setInteraction(QCP::iRangeDrag);
-    customPlot->setInteraction(QCP::iRangeZoom);
+        customPlot->setInteraction(QCP::iRangeDrag);
+        customPlot->setInteraction(QCP::iRangeZoom);
+    }
+    else
+        deactivateAllControlButtons();
 }
 
 void MainWindow::on_DefaultViewButton_clicked()
@@ -481,9 +543,15 @@ void MainWindow::graphSelectionChanged(QCPDataSelection selection)
     ui->label_SelectedPointsCount->setText(QString::number(selection.dataRangeCount()) + "/" + QString::number(selection.dataPointCount()));
 
     if (selection.dataPointCount())
+    {
         ui->DeleteDataButton->setEnabled(true);
+        ui->AnalyzePeakButton->setEnabled(true);
+    }
     else
+    {
         ui->DeleteDataButton->setEnabled(false);
+        ui->AnalyzePeakButton->setEnabled(false);
+    }
 }
 
 void MainWindow::plotContextMenuRequested(QPoint pos)
@@ -613,10 +681,15 @@ void MainWindow::smoothSettingsDialogWasClosed(bool buttonType)
 
 void MainWindow::on_ZoomInButton_clicked()
 {
-    deactivateAllControlButtons();
-    ui->ZoomInButton->setChecked(true);
+    if (ui->ZoomInButton->isEnabled())
+    {
+        deactivateAllControlButtons();
+        ui->ZoomInButton->setChecked(true);
 
-    customPlot->setSelectionRectMode(QCP::srmZoom);
+        customPlot->setSelectionRectMode(QCP::srmZoom);
+    }
+    else
+        deactivateAllControlButtons();
 }
 
 void MainWindow::deactivateAllControlButtons()
@@ -631,8 +704,15 @@ void MainWindow::deactivateAllControlButtons()
     ui->DragAndDropButton->setChecked(false);
     ui->SelectionButton->setDown(false);
     ui->SelectionButton->setChecked(false);
-}
+    ui->CrossButton->setDown(false);
+    ui->CrossButton->setChecked(false);
 
+    cross_1_hor->setVisible(false);
+    cross_1_vert->setVisible(false);
+    cross_2_hor->setVisible(false);
+    cross_2_vert->setVisible(false);
+    customPlot->replot();
+}
 
 void MainWindow::on_ConvolutionButton_clicked()
 {
@@ -640,35 +720,7 @@ void MainWindow::on_ConvolutionButton_clicked()
 
     convolutionSettingsDialog->show();
 
-    QTreeWidgetItem *newChild_si = new QTreeWidgetItem();
-    newChild_si->setText(0, CVCurveData::PlotTypes.at(CVCurveData::I_vs_E_semiint));
-    QTreeWidgetItem *newChild_sd = new QTreeWidgetItem();
-    newChild_sd->setText(0, CVCurveData::PlotTypes.at(CVCurveData::I_vs_E_semidiff));
 
-    QTreeWidgetItem *currentItem = ui->treeWidget->currentItem();
-    if (!currentItem->childCount())
-        currentItem = currentItem->parent();
-
-    for (QVector<CVCurveData*>::iterator it = CVCurves->begin(); it != CVCurves->end(); it++)
-    {
-        if (currentItem->text(0) == (*it)->fileName())
-        {
-            if ((*it)->convolute())
-            {
-                currentItem->addChild(newChild_si);
-                currentItem->addChild(newChild_sd);
-                ui->treeWidget->currentItem()->setSelected(false);
-                currentItem->setExpanded(true);
-                newChild_sd->setSelected(true);
-                ui->treeWidget->setCurrentItem(newChild_sd);
-                ui->treeWidget->setFocus();
-                drawPlot(*it, CVCurveData::PlotTypes.at(CVCurveData::I_vs_E_semidiff));
-            }
-            else
-                QMessageBox::warning(this, "", "Something went wrong!");
-            break;
-        }
-    }
 }
 
 void MainWindow::on_SmoothButton_clicked()
@@ -746,6 +798,8 @@ void MainWindow::mousePositionChanged(QMouseEvent *event)
             cross_2_hor->point2->setCoords(mouse_X, mouse_Y);
             cross_2_vert->point1->setCoords(mouse_X, mouse_Y - 1);
             cross_2_vert->point2->setCoords(mouse_X, mouse_Y);
+            deltaXlabel->setText("ΔX = " + QString::number(mouse_X - cross_1_coordinates.x(), 'g', 4));
+            deltaYlabel->setText("ΔY = " + QString::number(mouse_Y - cross_1_coordinates.y(), 'g', 4));
             customPlot->replot();
         }
         else
@@ -764,8 +818,12 @@ void MainWindow::mousePressedOnGraph(QMouseEvent *event)
     mouseIsPressedOnGraph = true;
     if (ui->CrossButton->isChecked())
     {
+        deltaXlabel->setVisible(true);
+        deltaYlabel->setVisible(true);
         cross_2_hor->setVisible(true);
         cross_2_vert->setVisible(true);
+        cross_1_coordinates.setX(customPlot->xAxis->pixelToCoord(event->pos().x()));
+        cross_1_coordinates.setY(customPlot->yAxis->pixelToCoord(event->pos().y()));
     }
 }
 
@@ -774,17 +832,33 @@ void MainWindow::mouseReleasedOnGraph(QMouseEvent *event)
     mouseIsPressedOnGraph = false;
     if (ui->CrossButton->isChecked())
     {
+        deltaXlabel->setVisible(false);
+        deltaYlabel->setVisible(false);
         cross_2_hor->setVisible(false);
         cross_2_vert->setVisible(false);
+
+        double mouse_X = customPlot->xAxis->pixelToCoord(event->pos().x());
+        double mouse_Y = customPlot->yAxis->pixelToCoord(event->pos().y());
+
+        cross_1_hor->point1->setCoords(mouse_X - 1, mouse_Y);
+        cross_1_hor->point2->setCoords(mouse_X, mouse_Y);
+        cross_1_vert->point1->setCoords(mouse_X, mouse_Y - 1);
+        cross_1_vert->point2->setCoords(mouse_X, mouse_Y);
+        customPlot->replot();
     }
 }
 
 void MainWindow::on_SelectionButton_clicked()
 {
-    deactivateAllControlButtons();
-    ui->SelectionButton->setChecked(true);
+    if (ui->SelectionButton->isChecked())
+    {
+        deactivateAllControlButtons();
+        ui->SelectionButton->setChecked(true);
 
-    customPlot->setSelectionRectMode(QCP::srmSelect);
+        customPlot->setSelectionRectMode(QCP::srmSelect);
+    }
+    else
+        deactivateAllControlButtons();
 }
 
 
@@ -792,6 +866,7 @@ void MainWindow::on_actionConvolute_all_triggered()
 {
     updateFileNamesListFromTreeWidget();
     convoluteMultipleFilesDialog = new ConvoluteMultipleFilesDialog(&fileNamesListFromTreeWidget, this);
+    convoluteMultipleFilesDialog->setWindowModality(Qt::WindowModal);
     convoluteMultipleFilesDialog->show();
 }
 
@@ -800,6 +875,7 @@ void MainWindow::on_actionSmooth_all_I_vs_E_triggered()
 {
     updateFileNamesListFromTreeWidget();
     smoothMultipleFilesDialog = new SmoothMultipleFilesDialog(CVCurves, &fileNamesListFromTreeWidget, this);
+    smoothMultipleFilesDialog->setWindowModality(Qt::WindowModal);
     smoothMultipleFilesDialog->show();
 }
 
@@ -911,17 +987,14 @@ void MainWindow::on_CrossButton_clicked()
 {
     if (ui->CrossButton->isChecked())
     {
+        deactivateAllControlButtons();
+        ui->CrossButton->setChecked(true);
+
         cross_1_hor->setVisible(true);
         cross_1_vert->setVisible(true);
         customPlot->replot();
     }
     else
-    {
-        cross_1_hor->setVisible(false);
-        cross_1_vert->setVisible(false);
-        cross_2_hor->setVisible(false);
-        cross_2_vert->setVisible(false);
-        customPlot->replot();
-    }
+        deactivateAllControlButtons();
 }
 

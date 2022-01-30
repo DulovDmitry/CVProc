@@ -23,6 +23,7 @@ public:
     ~GeneralSettingsDialog();
 
     friend class MainWindow;
+    friend class CVCurveData;
 
 private slots:
     void loadSettings();
@@ -64,7 +65,7 @@ private:
     QColor *selectionColor;
     QColor *smoothColor;
 
-    //      Registry values
+    // *** Registry values ***
     
     // General
     bool decimalSeparator; // 0 - comma, 1 - dot

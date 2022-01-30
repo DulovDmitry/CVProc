@@ -35,7 +35,7 @@ void CVCurveData::addLineInFileBody(QString line)
 void CVCurveData::processFileBody()
 {
     QRegularExpression separator("[( |\t)]");
-    QLocale locale(QLocale::English); // сделать опцию по выбору разделителя дробной части
+    QLocale locale(settings->value("DECIMAL_SEPARATOR", false).toBool() ? QLocale::English : QLocale::Catalan);
     QStringList currentLine;
     //int headerSize = mFileBody.at(1).split(separator, Qt::SkipEmptyParts).last().toInt();
     int headerSize = getDataBeginnigStringNumber();
@@ -226,7 +226,7 @@ int CVCurveData::getDataBeginnigStringNumber()
     return i+1;
 }
 
-bool CVCurveData::convolute()
+bool CVCurveData::convolute(int Ru, int Cd)
 {
     this->mEcorr.clear();
     this->mIcorr.clear();
@@ -245,8 +245,8 @@ bool CVCurveData::convolute()
     }
 
     double currentSum = 0;
-    int numberOfSteps = (I.size() - 1) * (I.size() - 2) / 2;
-    int currentStep = 0;
+    unsigned long int numberOfSteps = (I.size() - 1) * (I.size() - 2) / 2;
+    unsigned long int currentStep = 0;
     // double alpha = 0.99;
     double deltaT = mT.last()/mT.size();
 

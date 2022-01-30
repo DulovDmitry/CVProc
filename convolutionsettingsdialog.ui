@@ -13,13 +13,13 @@
   <property name="windowTitle">
    <string>Dialog</string>
   </property>
-  <widget class="QWidget" name="">
+  <widget class="QWidget" name="layoutWidget">
    <property name="geometry">
     <rect>
      <x>10</x>
      <y>10</y>
-     <width>206</width>
-     <height>60</height>
+     <width>209</width>
+     <height>64</height>
     </rect>
    </property>
    <layout class="QHBoxLayout" name="horizontalLayout_3">
@@ -40,7 +40,7 @@
          </widget>
         </item>
         <item>
-         <widget class="QSpinBox" name="spinBox">
+         <widget class="QSpinBox" name="Ru_spinBox">
           <property name="minimumSize">
            <size>
             <width>60</width>
@@ -79,7 +79,7 @@
          </widget>
         </item>
         <item>
-         <widget class="QSpinBox" name="spinBox_2">
+         <widget class="QSpinBox" name="Cd_spinBox">
           <property name="minimumSize">
            <size>
             <width>60</width>
@@ -108,7 +108,7 @@
     <item>
      <layout class="QVBoxLayout" name="verticalLayout">
       <item>
-       <widget class="QPushButton" name="pushButton">
+       <widget class="QPushButton" name="OkButton">
         <property name="maximumSize">
          <size>
           <width>70</width>
@@ -121,7 +121,7 @@
        </widget>
       </item>
       <item>
-       <widget class="QPushButton" name="pushButton_2">
+       <widget class="QPushButton" name="CancelButton">
         <property name="maximumSize">
          <size>
           <width>70</width>
