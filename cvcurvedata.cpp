@@ -103,8 +103,10 @@ void CVCurveData::processFileBody()
     }
     if(mTIsAvaliable)
     {
+        double t0 = mT[0];
         for (int i = 0; i < mT.size(); i++)
-            mT[i] -= mT[0];
+            mT[i] -= t0;
+
 
         mTmin = *std::min_element(mT.begin(), mT.end());
         mTmax = *std::max_element(mT.begin(), mT.end());
@@ -117,7 +119,7 @@ void CVCurveData::processFileBody()
     mFileName = fileInfo.completeBaseName();
 }
 
-QString CVCurveData::avaliableParameters()
+QString CVCurveData::avaliableInputParameters()
 {
     QStringList parameters;
 
@@ -126,6 +128,33 @@ QString CVCurveData::avaliableParameters()
     parameters.append(mTIsAvaliable ? "t" : NULL);
 
     return parameters.join(", ");
+}
+
+QList<QPair<QString, QVector<double>>> CVCurveData::getAvaliableDataForTable()
+{
+    //QStringList parameters;
+    //QHash<QString, QVector<double>> data;
+
+    QList<QPair<QString, QVector<double>>> data;
+
+    data.append(QPair<QString, QVector<double>>(mEIsAvaliable ? (settings->value("POTENTIAL_UNITS", false).toBool() ? "E, V" : "E, mV") : QString(), mEIsAvaliable ? mE : QVector<double>()));
+    data.append(QPair<QString, QVector<double>>(mIIsAvaliable ? (settings->value("CURRENT_UNITS", false).toBool() ? "i, A" : "i, mA") : QString(), mIIsAvaliable ? mI : QVector<double>()));
+    data.append(QPair<QString, QVector<double>>(mTIsAvaliable ? "t, s" : QString(), mTIsAvaliable ? mT : QVector<double>()));
+    data.append(QPair<QString, QVector<double>>(mEsmoothedIsAvaliable ? (settings->value("POTENTIAL_UNITS", false).toBool() ? "E (smoothed), V" : "E (smoothed), mV") : QString(), mEsmoothedIsAvaliable ? mEsmoothed : QVector<double>()));
+    data.append(QPair<QString, QVector<double>>(mIsmoothedIsAvaliable ? (settings->value("CURRENT_UNITS", false).toBool() ? "i (smoothed), A" : "i (smoothed), mA") : QString(), mIsmoothedIsAvaliable ? mIsmoothed : QVector<double>()));
+    data.append(QPair<QString, QVector<double>>(mIsiIsAvaliable ? "i (semi-integral)" : QString(), mIsiIsAvaliable ? mIsi : QVector<double>()));
+    data.append(QPair<QString, QVector<double>>(mIsdIsAvaliable ? "i (semi-differential)" : QString(), mIsdIsAvaliable ? mIsd : QVector<double>()));
+
+//    parameters.append(mEIsAvaliable ? (settings->value("POTENTIAL_UNITS", false).toBool() ? "E, V" : "E, mV") : NULL);
+//    parameters.append(mIIsAvaliable ? (settings->value("CURRENT_UNITS", false).toBool() ? "i, A" : "i, mA") : NULL);
+//    parameters.append(mTIsAvaliable ? "t, s" : NULL);
+//    parameters.append(mEsmoothedIsAvaliable ? (settings->value("POTENTIAL_UNITS", false).toBool() ? "E (smoothed), V" : "E (smoothed), mV") : NULL);
+//    parameters.append(mIsmoothedIsAvaliable ? (settings->value("CURRENT_UNITS", false).toBool() ? "i (smoothed), A" : "i (smoothed), mA") : NULL);
+//    parameters.append(mIsiIsAvaliable ? "i (semi-integral)" : NULL);
+//    parameters.append(mIsdIsAvaliable ? "i (semi-differential)" : NULL);
+
+    data.removeAll(QPair<QString, QVector<double>>(QString(), QVector<double>()));
+    return data;
 }
 
 void CVCurveData::initializeParameters()
@@ -226,8 +255,10 @@ int CVCurveData::getDataBeginnigStringNumber()
     return i+1;
 }
 
-bool CVCurveData::convolute(int Ru, int Cd)
+bool CVCurveData::convolute()
 {
+    int Ru = 0, Cd = 0; // get from registry
+
     this->mEcorr.clear();
     this->mIcorr.clear();
     this->mIsd.clear();
@@ -334,6 +365,12 @@ bool CVCurveData::convolute(int Ru, int Cd)
     return true;
 }
 
+bool CVCurveData::startConvolution()
+{
+    QFuture<bool> f = QtConcurrent::run(this, convolute);
+    return f.result();
+}
+
 QString CVCurveData::exportParametersAsText()
 {
     QString text;
@@ -342,7 +379,8 @@ QString CVCurveData::exportParametersAsText()
     text += mIIsAvaliable ? "\tI, mA" : NULL;
     text += mTIsAvaliable ? "\tt, s" : NULL;
     text += mTcorrIsAvaliable ? "\tt (corrected), s" : NULL;
-    text += mEsmoothedIsAvaliable ? "E (smoothed), V" : NULL;
+    text += mEsmoothedIsAvaliable ? "\tE (smoothed), V" : NULL;
+    text += mIsmoothedIsAvaliable ? "\tI (smoothed), mA" : NULL;
     text += mIsiIsAvaliable ? "\tI (semiint)" : NULL;
     text += mIsdIsAvaliable ? "\tI (semidiff)" : NULL;
 
@@ -364,6 +402,9 @@ QString CVCurveData::exportParametersAsText()
 
         if (mEsmoothedIsAvaliable)
             text += QString("\t%1").arg(mEsmoothed[i]);
+
+        if (mIsmoothedIsAvaliable)
+            text += QString("\t%1").arg(mIsmoothed[i]);
 
         if (mIsiIsAvaliable)
             if (i < mIsi.size())

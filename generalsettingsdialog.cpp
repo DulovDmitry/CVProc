@@ -25,6 +25,9 @@ GeneralSettingsDialog::GeneralSettingsDialog(QWidget *parent) :
     ui->potentialAxisCaption_lineEdit->setText(potentialAxisCaption);
     ui->Ru_spinBox->setValue(RuDefaultValue);
     ui->Cd_spinBox->setValue(CdDefaultValue);
+    ui->I_vs_E_checkBox->setChecked(true);  // has to be configured
+    ui->I_vs_E_checkBox->setEnabled(false); //
+    ui->E_vs_T_checkBox->setChecked(true);  //
 
     // Graphics tab
     ui->CurveColor_Button->setStyleSheet("QPushButton{background-color: " + curveColor->toRgb().name() + "; border: 1px solid lightgray; border-radius: 5px}");
@@ -70,7 +73,7 @@ void GeneralSettingsDialog::loadSettings()
     plotLineWidth = settings->value("PLOT_LINE_WIDTH", 2).toInt();
     axisWidth = settings->value("AXIS_WIDTH", 1.5).toDouble();
     curveMargin = settings->value("CURVE_MARGIN", 0.07).toDouble();
-    axisFontSize = settings->value("AXIS_FONT_SIZE", 15).toInt();
+    axisFontSize = settings->value("AXIS_FONT_SIZE", 12).toInt();
     axisFontFamily = settings->value("AXIS_FONT_FAMILY", "Arial").toString();
 
     // Export settings
@@ -101,6 +104,9 @@ void GeneralSettingsDialog::saveSettings()
     settings->setValue("AXIS_FONT_FAMILY", axisFontFamily);
 
     // Export settings
+
+
+    settings->sync();
 
 }
 

@@ -2,6 +2,7 @@
 #define SMOOTHSETTINGSDIALOG_H
 
 #include <QDialog>
+#include <QCloseEvent>
 
 namespace Ui {
 class SmoothSettingsDialog;
@@ -28,6 +29,8 @@ private slots:
     void on_Cancel_Button_clicked();
 
     void setInitialParameters();
+
+    void closeEvent(QCloseEvent *event);
 
 public slots:
     void on_pol_order_spinBox_valueChanged(int arg1);

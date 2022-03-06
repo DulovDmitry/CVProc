@@ -11,6 +11,10 @@
 #include <QDebug>
 #include <QSettings>
 #include <QRegularExpression>
+#include <QThread>
+#include <QThreadPool>
+#include <QtConcurrent/QtConcurrent>
+#include <QFuture>
 
 #include "generalsettingsdialog.h"
 
@@ -69,15 +73,19 @@ public:
     int numberOfLinesInFileBody() const {return mFileBody.size();}
     int sizeOfE() const {return mE.size();}
     bool EIsAvaliable() const {return mEIsAvaliable;}
+    bool EsmoothedIsAvaliable() const {return mEsmoothedIsAvaliable;}
     bool IIsAvaliable() const {return mIIsAvaliable;}
+    bool IsmoothedIsAvaliable() const {return mIsmoothedIsAvaliable;}
     bool TIsAvaliable() const {return mTIsAvaliable;}
     bool IsiIsAvaliable() const {return  mIsiIsAvaliable;}
     bool IsdIsAvaliable() const {return  mIsdIsAvaliable;}
-    QString avaliableParameters();
+    QString avaliableInputParameters();
+    QList<QPair<QString, QVector<double>>> getAvaliableDataForTable();
 
     // complex methods (public):
     void processFileBody();
-    bool convolute(int Ru, int Cd);
+    bool convolute();
+    bool startConvolution();
     QString exportParametersAsText();
     void SavGolFilter(int m, int pol_order, PlotType);
     void changeFileName(QString newFileName);

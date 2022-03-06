@@ -46,4 +46,9 @@ void SmoothSettingsDialog::setInitialParameters()
     ui->pol_order_spinBox->setValue(2);
 }
 
+void SmoothSettingsDialog::closeEvent(QCloseEvent *event)
+{
+    on_Cancel_Button_clicked();
+}
+
 

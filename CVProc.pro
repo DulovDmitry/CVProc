@@ -1,6 +1,6 @@
 QT       += core gui
 
-greaterThan(QT_MAJOR_VERSION, 4): QT += widgets printsupport
+greaterThan(QT_MAJOR_VERSION, 4): QT += widgets printsupport concurrent
 
 CONFIG += c++11
 
@@ -18,29 +18,35 @@ DEFINES += QT_DEPRECATED_WARNINGS
 SOURCES += \
     convolutemultiplefilesdialog.cpp \
     convolutionsettingsdialog.cpp \
+    convolutionstatusbardialog.cpp \
     cvcurvedata.cpp \
     generalsettingsdialog.cpp \
     main.cpp \
     mainwindow.cpp \
     qcustomplot.cpp \
+    showdatadialog.cpp \
     smoothmultiplefilesdialog.cpp \
     smoothsettingsdialog.cpp
 
 HEADERS += \
     convolutemultiplefilesdialog.h \
     convolutionsettingsdialog.h \
+    convolutionstatusbardialog.h \
     cvcurvedata.h \
     generalsettingsdialog.h \
     mainwindow.h \
     qcustomplot.h \
+    showdatadialog.h \
     smoothmultiplefilesdialog.h \
     smoothsettingsdialog.h
 
 FORMS += \
     convolutemultiplefilesdialog.ui \
     convolutionsettingsdialog.ui \
+    convolutionstatusbardialog.ui \
     generalsettingsdialog.ui \
     mainwindow.ui \
+    showdatadialog.ui \
     smoothmultiplefilesdialog.ui \
     smoothsettingsdialog.ui
 

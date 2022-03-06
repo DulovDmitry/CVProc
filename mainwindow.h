@@ -12,10 +12,14 @@
 #include "generalsettingsdialog.h"
 #include "convolutemultiplefilesdialog.h"
 #include "smoothmultiplefilesdialog.h"
+#include "showdatadialog.h"
+#include "convolutionstatusbardialog.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
+
+class GraphData;
 
 class MainWindow : public QMainWindow
 {
@@ -48,6 +52,7 @@ private slots:
     // Tree widget context menu control
     void initializeTreeContextMenu();
     void treeContextMenuRequested(QPoint pos);
+    void showCVDataInDialog();
 
     // buttons control:
     void on_SelectionButton_clicked();
@@ -72,22 +77,28 @@ private slots:
     void savePlotAsJPEG();
     void savePlotAsPNG();
     void exportPlotAsTXT();
+    void makeAllGraphsInvisible();
 
     // Menubar slots
     void on_actionSettings_triggered();
     void on_actionConvolute_all_triggered();
     void on_actionSmooth_all_I_vs_E_triggered();
     void on_actionImport_ASCII_triggered();
+    void on_actionCreate_stack_triggered();
 
     // Other methods and slots
     void SavGolFilterApply(int m, int pol_order);
     void convolutionApply(int Ru, int Cd);
     void smoothSettingsDialogWasClosed(bool buttonType);
+    void createPlotStack(QStringList fileNames, QString plotType);
+    void getGraphDataFromCVDataAndPlotType(CVCurveData *CVData, QString plotType);
 
 private:
     Ui::MainWindow *ui;
     QVector<CVCurveData*> *CVCurves;
     QSettings *settings;
+    QThread *CVCurveDataThread;
+    GraphData *graphData;
 
     QString fileNameBuffer;
     QStringList fileNamesListFromTreeWidget;
@@ -101,6 +112,7 @@ private:
     QCPCurve *curvePlot;
     QCPCurve *smoothedCurvePlot;
     QCPSelectionRect *selectionRect;
+    QMap<QTreeWidgetItem*, QList<QCPCurve*>*> mapWithStacks;
 
     // Items for graph
     QCPItemStraightLine *cross_1_vert;
@@ -117,6 +129,8 @@ private:
     ConvolutionSettingsDialog *convolutionSettingsDialog;
     ConvoluteMultipleFilesDialog *convoluteMultipleFilesDialog;
     SmoothMultipleFilesDialog *smoothMultipleFilesDialog;
+    ShowDataDialog *showDataDialog;
+    ConvolutionStatusBarDialog *convolutionStatusBarDialog;
 
     // Filters for QFileDialogs
     const QString pdfFilter = "PDF files (*.pdf);; All files (*.*)";
@@ -139,10 +153,24 @@ private:
     // Context menu for tree widget
     QMenu *treeContextMenu;
     QAction *renameItem;
+    QAction *showData;
     QAction *showInExplorer;
     QAction *convolute;
     QAction *deleteItem;
     QAction *deleteAllItems;
+
+};
+
+class GraphData
+{
+public:
+    GraphData() { qDebug() << "GraphData constructor"; }
+    ~GraphData() { qDebug() << "GraphData destructor"; }
+
+    QString xAxisCaption;
+    QString yAxisCaption;
+    QVector<double> xValues;
+    QVector<double> yValues;
 
 };
 #endif // MAINWINDOW_H
