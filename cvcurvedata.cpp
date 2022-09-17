@@ -3,11 +3,13 @@
 using namespace Eigen;
 using namespace std;
 
-QStringList const CVCurveData::PlotTypes = QStringList() << "I vs E" << "E vs t" << "I (semiintegral) vs E" << "I (semidifferential) vs E" << "I vs E (smoothed)" << "E vs t (smoothed)";
+QStringList const CVCurveData::PlotTypes = QStringList() << "I vs E" << "E vs t" << "I vs t" << "I (semiintegral) vs E" << "I (semidifferential) vs E" << "I vs E (smoothed)" << "E vs t (smoothed)" << "I vs t (smoothed)";
 
 CVCurveData::CVCurveData()
 {
     initializeParameters();
+
+    qDebug() << "CVCurveData constructor";
 }
 
 CVCurveData::CVCurveData(QString filePath)
@@ -15,6 +17,17 @@ CVCurveData::CVCurveData(QString filePath)
     this->mFilePath = filePath;
     settings = new QSettings("ORG335a", "CVProc", this);
     initializeParameters();
+
+//    qDebug() << "CVCurveData 1" << QThread::currentThread();
+
+//    QThread *_thread = new QThread(this);
+//    _thread->setObjectName("CVCurveData");
+//    this->moveToThread(_thread);
+//    _thread->start();
+
+//    qDebug() << "CVCurveData 2" << QThread::currentThread();
+
+    qDebug() << "CVCurveData constructor";
 }
 
 CVCurveData::~CVCurveData()
@@ -89,6 +102,8 @@ void CVCurveData::processFileBody()
 
     if (mEIsAvaliable)
     {
+        correctPotentialValues();
+
         mEmin = *std::min_element(mE.begin(), mE.end());
         mEmax = *std::max_element(mE.begin(), mE.end());
         mErange = mEmax - mEmin;
@@ -99,7 +114,7 @@ void CVCurveData::processFileBody()
         mImax = *std::max_element(mI.begin(), mI.end());
         mIrange = mImax - mImin;
 
-        axisRanges.insert(PlotTypes.at(I_vs_E), Range(ERangeMin(), ERangeMax(), IRangeMin(), IRangeMax()));
+        //axisRanges.insert(PlotTypes.at(I_vs_E), Range(ERangeMin(), ERangeMax(), IRangeMin(), IRangeMax()));
     }
     if(mTIsAvaliable)
     {
@@ -112,7 +127,7 @@ void CVCurveData::processFileBody()
         mTmax = *std::max_element(mT.begin(), mT.end());
         mTrange = mTmax - mTmin;
 
-        axisRanges.insert(PlotTypes.at(E_vs_T), Range(TRangeMin(), TRangeMax(), ERangeMin(), ERangeMax()));
+        //axisRanges.insert(PlotTypes.at(E_vs_T), Range(TRangeMin(), TRangeMax(), ERangeMin(), ERangeMax()));
     }
 
     QFileInfo fileInfo(mFilePath);
@@ -169,6 +184,7 @@ void CVCurveData::initializeParameters()
     mTmin = 0;
     mTrange = 0;
     mScanRate = 0;
+    actualPotentialShift = 0;
     mEIsAvaliable = false;
     mIIsAvaliable = false;
     mTIsAvaliable = false;
@@ -257,6 +273,7 @@ int CVCurveData::getDataBeginnigStringNumber()
 
 bool CVCurveData::convolute()
 {
+    qDebug() << "convolute() " << QThread::currentThread();
     int Ru = 0, Cd = 0; // get from registry
 
     this->mEcorr.clear();
@@ -278,78 +295,39 @@ bool CVCurveData::convolute()
     double currentSum = 0;
     unsigned long int numberOfSteps = (I.size() - 1) * (I.size() - 2) / 2;
     unsigned long int currentStep = 0;
-    // double alpha = 0.99;
     double deltaT = mT.last()/mT.size();
 
-    for (int i = 1; i < I.size(); i++)
+    double sqtr_deltaT = sqrt(deltaT);
+    double inversed_sqrt_pi = 1/sqrt(M_PI);
+    const int I_size = I.size();
+
+    double term_A[I_size] = {0}; // term_A = (I[k-1] + I[k])/2 * sqtr_deltaT
+    double term_B[I_size] = {0}; // term_B = 1 / sqrt(i - k + 0.5)
+
+    for (int i = 1; i < I_size; i++)
     {
-// Algorithm #2
-//        currentSum = 0;
-//        for (int k = 0; k <= i; k++)
-//        {
-//            currentSum += ((I[k+2])/sqrt(mT[i+2] - mT[k]) + (I[k+2])/sqrt(mT[i+2] - mT[k+1])) * (mT[k+1] - mT[k]) / 2;
-//            currentStep++;
-//        }
-//        currentSum /= sqrt(M_PI);
-//        this->mIsi.append(currentSum);
+        term_A[i] = (I[i-1] + I[i])/2 * sqtr_deltaT * inversed_sqrt_pi;
+        term_B[i-1] = 1 / sqrt((i - 1) + 0.5);
+    }
 
-//        emit progressWasChanged((int)100*currentStep/numberOfSteps);
-
-// Algorithm #3
-//        currentSum = 0;
-//        for (int k = 0; k <= i; k++)
-//        {
-//            if (i == k)
-//            {
-//                currentSum += ((I[k])/sqrt(mT[i+1] - mT[k]) + (alpha*I[k+1] + (1-alpha)*I[k])/sqrt(mT[i+1] - (1-alpha)*mT[k] + alpha*mT[k+1])) * (mT[k+1] - mT[k])*alpha / 2;
-//                currentStep++;
-//                break;
-//            }
-//            currentSum += ((I[k])/sqrt(mT[i+1] - mT[k]) + (I[k+1])/sqrt(mT[i+1] - mT[k+1])) * (mT[k+1] - mT[k]) / 2;
-//            currentStep++;
-//        }
-//        currentSum /= sqrt(M_PI);
-//        this->mIsi.append(currentSum);
-
-//        emit progressWasChanged((int)100*currentStep/numberOfSteps);
-
-// Algorithm #4
-//        currentSum = 0;
-//        for (int k = 1; k <= i; k++)
-//        {
-//            if (i == k)
-//            {
-//                currentSum += ((I[k-1])/sqrt(mT[i+1] - mT[k-1]) + 4*(I[k])/sqrt(mT[i+1] - mT[k]) + (alpha*I[k+1] + (1-alpha)*I[k])/sqrt(mT[i+1] - (1-alpha)*mT[k] + alpha*mT[k+1])) * (mT[k+1] - mT[k-1])*alpha / 12;
-//                currentStep++;
-//                break;
-//            }
-//            currentSum += ((I[k-1])/sqrt(mT[i+1] - mT[k-1]) + 4*(I[k])/sqrt(mT[i+1] - mT[k]) + (I[k+1])/sqrt(mT[i+1] - mT[k+1])) * (mT[k+1] - mT[k-1]) / 12;
-//            currentStep++;
-//        }
-//        currentSum /= sqrt(M_PI);
-//        this->mIsi.append(currentSum);
-
-//        emit progressWasChanged((int)100*currentStep/numberOfSteps);
-
-// Algorithm #5 (from book)
+    for (int i = 1; i < I_size; i++)
+    {
+        // Algorithm H
         currentSum = 0;
         for (int k = 1; k <= i; k++)
         {
-            currentSum += (I[k-1] + I[k])/2 * sqrt(deltaT) / sqrt(i - k + 0.5);
+            currentSum += term_A[k] * term_B[i-k];
             currentStep++;
         }
-        currentSum /= sqrt(M_PI);
-        this->mIsi.append(currentSum);
-
-        emit progressWasChanged((int)100*currentStep/numberOfSteps);
-
+        mIsi.append(currentSum);
+        emit progressWasChanged((int)(100*(double)currentStep/numberOfSteps));
     }
     mIsiIsAvaliable = true;
 
     mIsiMin = *std::min_element(mIsi.begin(), mIsi.end());
     mIsiMax = *std::max_element(mIsi.begin(), mIsi.end());
     mIsiRange = mIsiMax - mIsiMin;
-    axisRanges.insert(PlotTypes.at(I_vs_E_semiint), Range(ERangeMin(), ERangeMax(), IsiRangeMin(), IsiRangeMax()));
+    //axisRanges.insert(PlotTypes.at(I_vs_E_semiint), Range(ERangeMin(), ERangeMax(), IsiRangeMin(), IsiRangeMax()));
 
     for (int i = 0; i < mIsi.size() - 1; i++)
     {
@@ -360,14 +338,16 @@ bool CVCurveData::convolute()
     mIsdMin = *std::min_element(mIsd.begin(), mIsd.end());
     mIsdMax = *std::max_element(mIsd.begin(), mIsd.end());
     mIsdRange = mIsdMax - mIsdMin;
-    axisRanges.insert(PlotTypes.at(I_vs_E_semidiff), Range(ERangeMin(), ERangeMax(), IsdRangeMin(), IsdRangeMax()));
+    //axisRanges.insert(PlotTypes.at(I_vs_E_semidiff), Range(ERangeMin(), ERangeMax(), IsdRangeMin(), IsdRangeMax()));
 
     return true;
 }
 
 bool CVCurveData::startConvolution()
 {
+    qDebug() << "startConvolution() " << QThread::currentThread();
     QFuture<bool> f = QtConcurrent::run(this, convolute);
+    f.waitForFinished();
     return f.result();
 }
 
@@ -425,51 +405,86 @@ void CVCurveData::SavGolFilter(int m, int pol_order, CVCurveData::PlotType plotT
     // * E_vs_T
 
     QVector<double> coefs = vectorWithCoefsForSavGolFilter(m, pol_order);
+    QVector<double> *activeVector;
+    QVector<double> *resultVector;
+    int activeVectorSize;
     double current_value = 0;
 
     if (plotType == CVCurveData::I_vs_E)
     {
-        mIsmoothed.clear();
-        for (int i = 0; i < m; i++)
-            mIsmoothed.append(mI[i]);
-
-        for (int i = m; i < mI.size() - m; i++)
-        {
-            for (int k = -m; k <= m; k++)
-                current_value += mI[i+k]*coefs[k+m];
-            mIsmoothed.append(current_value);
-            current_value = 0;
-        }
-
-        for (int i = mI.size() - m; i < mI.size(); i++)
-            mIsmoothed.append(mI[i]);
-
+        activeVector = &mI;
+        resultVector = &mIsmoothed;
         mIsmoothedIsAvaliable = true;
-        axisRanges.insert(PlotTypes.at(I_vs_E_smoothed), Range(ERangeMin(), ERangeMax(), IRangeMin(), IRangeMax()));
     }
     else if (plotType == CVCurveData::E_vs_T)
     {
-        mEsmoothed.clear();
-        for (int i = 0; i < m; i++)
-            mEsmoothed.append(mE[i]);
-
-        for (int i = m; i < mE.size() - m; i++)
-        {
-            for (int k = -m; k <= m; k++)
-                current_value += mE[i+k]*coefs[k+m];
-            mEsmoothed.append(current_value);
-            current_value = 0;
-        }
-
-        for (int i = mE.size() - m; i < mE.size(); i++)
-            mEsmoothed.append(mE[i]);
+        activeVector = &mE;
+        resultVector = &mEsmoothed;
         mEsmoothedIsAvaliable = true;
-        axisRanges.insert(PlotTypes.at(E_vs_T_smoothed), Range(TRangeMin(), TRangeMax(), ERangeMin(), ERangeMax()));
     }
+
+    if (activeVector->isEmpty()) return;
+
+    activeVectorSize = activeVector->size();
+    resultVector->clear();
+    for (int i = 0; i < m; i++)
+        resultVector->append(activeVector->at(i));
+
+    for (int i = m; i < activeVectorSize - m; i++)
+    {
+        for (int k = -m; k <= m; k++)
+            current_value += activeVector->at(i+k)*coefs[k+m];
+
+        resultVector->append(current_value);
+        current_value = 0;
+    }
+
+    for (int i = activeVectorSize - m; i < activeVectorSize; i++)
+        resultVector->append(activeVector->at(i));
 
 }
 
 void CVCurveData::changeFileName(QString newFileName)
 {
     mFileName = newFileName;
+}
+
+void CVCurveData::correctPotentialValues(GeneralSettingsDialog *generalSettings)
+{
+    const int settingsShiftValue = generalSettings->potentialCorrelationCoeffitient;
+    const int shift = settingsShiftValue - actualPotentialShift;
+    bool potentialUnits = generalSettings->potentialUnits;
+
+    for (int i = 0; i < mE.size(); i++)
+    {
+        mE[i] = mE[i] + (potentialUnits ? (double)shift/1000 : shift);
+    }
+
+    mEmin = *std::min_element(mE.begin(), mE.end());
+    mEmax = *std::max_element(mE.begin(), mE.end());
+    mErange = mEmax - mEmin;
+
+    if (!mEsmoothed.isEmpty())
+    {
+        for (int i = 0; i < mEsmoothed.size(); i++)
+        {
+            mEsmoothed[i] = mEsmoothed[i] + (potentialUnits ? (double)shift : shift);
+        }
+    }
+
+    actualPotentialShift += shift;
+}
+
+void CVCurveData::correctPotentialValues()
+{
+    settings->sync();
+    const int shift = settings->value("POTENTIAL_CORRELATION_COEF").toInt();
+    bool potentialUnits = settings->value("POTENTIAL_UNITS").toBool();
+
+    for (int i = 0; i < mE.size(); i++)
+    {
+        mE[i] = mE[i] + (potentialUnits ? (double)shift/1000 : shift);
+    }
+
+    actualPotentialShift += shift;
 }

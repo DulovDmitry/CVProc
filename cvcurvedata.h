@@ -22,7 +22,7 @@
 #include <math.h>
 #include <Eigen/Dense>
 
-class Range;
+//class Range;
 
 class CVCurveData : public QObject
 {
@@ -36,10 +36,13 @@ public:
     {
         I_vs_E,
         E_vs_T,
+        I_vs_T,
         I_vs_E_semiint,
         I_vs_E_semidiff,
         I_vs_E_smoothed,
-        E_vs_T_smoothed
+        E_vs_T_smoothed,
+        I_vs_T_smoothed,
+        Not_A_Plot,
     };
 
     static const QStringList PlotTypes;
@@ -51,14 +54,14 @@ public:
     // getters:
     QString fileName() const {return mFileName;}
     QString filePath() const {return mFilePath;} // delete later
-    QVector<double> E() const {return mE;}
-    QVector<double> Esmoothed() const {return mEsmoothed;}
-    QVector<double> I() const {return mI;}
-    QVector<double> Isi() const {return mIsi;}
-    QVector<double> Isd() const {return mIsd;}
-    QVector<double> Ismoothed() const {return mIsmoothed;}
-    QVector<double> T() const {return mT;}
-    QVector<double> Tcorr() const {return mTcorr;}
+    const QVector<double>* E() const {return &mE;}
+    const QVector<double>* Esmoothed() const {return &mEsmoothed;}
+    const QVector<double>* I() const {return &mI;}
+    const QVector<double>* Isi() const {return &mIsi;}
+    const QVector<double>* Isd() const {return &mIsd;}
+    const QVector<double>* Ismoothed() const {return &mIsmoothed;}
+    const QVector<double>* T() const {return &mT;}
+    const QVector<double>* Tcorr() const {return &mTcorr;} // delete?
     double ERangeMin() const {return mEmin - mErange * curveMargin;}
     double ERangeMax() const {return mEmax + mErange * curveMargin;}
     double IRangeMin() const {return mImin - mIrange * curveMargin;}
@@ -89,15 +92,17 @@ public:
     QString exportParametersAsText();
     void SavGolFilter(int m, int pol_order, PlotType);
     void changeFileName(QString newFileName);
+    void correctPotentialValues(GeneralSettingsDialog *generalSettings);
+    void correctPotentialValues();
 
     // public members:
-    QMap<QString, Range> axisRanges;
+    // QMap<QString, Range> axisRanges; DELETE
 
 signals:
-     void progressWasChanged(int progress);
+    void progressWasChanged(int progress);
 
 private:
-     QSettings *settings;
+    QSettings *settings;
 
     // complex methods (private):
     void initializeParameters();
@@ -130,6 +135,7 @@ private:
     double curveMargin;
     double Ru;
     double mScanRate; // V/s
+    int actualPotentialShift;
 
     // flags:
     bool mEIsAvaliable;
@@ -142,32 +148,20 @@ private:
     bool mTcorrIsAvaliable; // delete later
 };
 
-class Range
-{
-public:
-    friend class CVCurveData;
+//class Range
+//{
+//public:
+//    friend class CVCurveData;
 
-    Range() {}
-    Range(double x_min, double x_max, double y_min, double y_max)
-    {
-        _xmin = x_min;
-        _xmax = x_max;
-        _ymin = y_min;
-        _ymax = y_max;
-    }
-    ~Range() {}
+//    Range() {}
+//    Range(double x_min, double x_max, double y_min, double y_max) : _xmin(x_min), _xmax(x_max), _ymin(y_min), _ymax(y_max) { qDebug << "Range constructor"; }
+//    ~Range() { qDebug << "Range destructor"; }
 
-    double x_min() const {return _xmin;}
-    double x_max() const {return _xmax;}
-    double y_min() const {return _ymin;}
-    double y_max() const {return _ymax;}
+//    double _xmin;
+//    double _xmax;
+//    double _ymin;
+//    double _ymax;
 
-private:
-    double _xmin;
-    double _xmax;
-    double _ymin;
-    double _ymax;
-
-};
+//};
 
 #endif // CVCURVEDATA_H

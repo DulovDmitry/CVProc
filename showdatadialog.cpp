@@ -46,7 +46,7 @@ void ShowDataDialog::fillTable()
 
     QList<QPair<QString, QVector<double>>> dataForTable = CVData->getAvaliableDataForTable();
     int columnCount = dataForTable.size();
-    int rowCount = CVData->I().size();
+    int rowCount = CVData->I()->size();
 
     QStringList headerLabels;
     for (QList<QPair<QString, QVector<double>>>::iterator it = dataForTable.begin(); it != dataForTable.end(); it++)

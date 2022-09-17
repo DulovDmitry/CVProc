@@ -21,6 +21,8 @@ SOURCES += \
     convolutionstatusbardialog.cpp \
     cvcurvedata.cpp \
     generalsettingsdialog.cpp \
+    gradientcolor.cpp \
+    graphdata.cpp \
     main.cpp \
     mainwindow.cpp \
     qcustomplot.cpp \
@@ -34,6 +36,8 @@ HEADERS += \
     convolutionstatusbardialog.h \
     cvcurvedata.h \
     generalsettingsdialog.h \
+    gradientcolor.h \
+    graphdata.h \
     mainwindow.h \
     qcustomplot.h \
     showdatadialog.h \

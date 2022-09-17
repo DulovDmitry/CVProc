@@ -158,6 +158,7 @@ void GeneralSettingsDialog::on_OK_Button_clicked()
     CdDefaultValue = ui->Cd_spinBox->value();
 
     emit applyButtonClicked();
+    emit OKButtonClicked();
     saveSettings();
     this->hide();
 }

@@ -1,4 +1,4 @@
-#include "mainwindow.h"
+﻿#include "mainwindow.h"
 #include "ui_mainwindow.h"
 
 MainWindow::MainWindow(QWidget *parent)
@@ -13,7 +13,13 @@ MainWindow::MainWindow(QWidget *parent)
     settings = new QSettings("ORG335a", "CVProc", this);
     loadSettings();
 
-    graphData = new GraphData();
+    QThread::currentThread()->setObjectName("Main thread");
+
+    // Temporary restrictions of functionality
+    ui->actionAbout_CVProc->setEnabled(false);
+    ui->actionAdd_data_manually->setEnabled(false);
+    ui->actionSave_file->setEnabled(false);
+    ui->actionImport_CVProc_file->setEnabled(false);
     
     // Appearance configuration
     ui->checkBox_particularCycle->setEnabled(false);
@@ -23,16 +29,33 @@ MainWindow::MainWindow(QWidget *parent)
     ui->AnalyzePeakButton->setEnabled(false);
     ui->progressBar->setStyleSheet("QProgressBar {border: 2px solid grey; border-radius: 10px; text-align: center;}");
     ui->progressBar->setStyleSheet("QProgressBar::chunk {background-color: #05B8CC; width: 1px;}");
+    ui->splitter_2->setSizes(QList<int>() << 300 << 4000);
+    ui->splitter->setSizes(QList<int>() << 2000 << 200);
 
     // Dialog with convolution progress bar
-    convolutionStatusBarDialog = new ConvolutionStatusBarDialog(this);
-    convolutionStatusBarDialog->setWindowModality(Qt::WindowModal);
+    convolutionStatusBarDialog = new ConvolutionStatusBarDialog();
+    //convolutionStatusBarDialog->setWindowModality(Qt::WindowModal);
+    //thread_convolutionStatusBarDialog = new QThread(this);
+    //thread_convolutionStatusBarDialog->setObjectName("thread_convolutionStatusBarDialog");
+    //convolutionStatusBarDialog->moveToThread(thread_convolutionStatusBarDialog);
+    //thread_convolutionStatusBarDialog->start();
+    //connect(convolutionStatusBarDialog, SIGNAL(destroyed()),
+    //        thread_convolutionStatusBarDialog, SLOT(quit()));
 
     // Dialog with general settings
     generalSettingsDialog = new GeneralSettingsDialog(this);
     generalSettingsDialog->setWindowModality(Qt::WindowModal);
     connect(generalSettingsDialog, SIGNAL(applyButtonClicked()),
             this, SLOT(applyGraphicalSettings()));
+    connect(generalSettingsDialog, SIGNAL(OKButtonClicked()),
+            this, SLOT(generalSettingsDialogClosed()));
+
+    // Axis captions
+    IAxisCaption = "i, mA"; //"i, " + (generalSettingsDialog->currentUnits ? "A" : "mA");
+    EAxisCaption = generalSettingsDialog->potentialAxisCaption + ", " + (generalSettingsDialog->potentialUnits ? "V" : "mV");
+    TAxisCaption = "time, seconds";
+    IsiAxisCaption = "I (semi-integral)";
+    IsdAxisCaption = "I (semi-differential)";
 
     // Dialog for smooth's settings configuration
     smoothSettingsDialog = new SmoothSettingsDialog(this);
@@ -45,8 +68,8 @@ MainWindow::MainWindow(QWidget *parent)
     // Dialog for convolution's settings configuration
     convolutionSettingsDialog = new ConvolutionSettingsDialog(this);
     convolutionSettingsDialog->setWindowModality(Qt::WindowModal);
-    connect(convolutionSettingsDialog, SIGNAL(okButtonClicked(int,int)),
-            this, SLOT(convolutionApply(int,int)));
+//    connect(convolutionSettingsDialog, SIGNAL(okButtonClicked(int,int)),
+//            this, SLOT(convolutionApply(int,int)));
 
     // Dialog for CV data demonstration
     showDataDialog = new ShowDataDialog(this);
@@ -54,8 +77,6 @@ MainWindow::MainWindow(QWidget *parent)
 
     // The vector with cyclic voltammetry data configuration
     CVCurves = new QVector<CVCurveData*>;
-//    CVCurveDataThread = new QThread(this);
-//    CVCurveDataThread->start();
 
     // plot preferences
     customPlot = new QCustomPlot(this);
@@ -187,31 +208,60 @@ MainWindow::MainWindow(QWidget *parent)
 MainWindow::~MainWindow()
 {
     saveSettings();
-    //CVCurveDataThread->terminate();
+
     while (!CVCurves->isEmpty())
         delete CVCurves->takeFirst();
 
-    delete graphData;
+    QList<GraphData*> graphData = hashWithTreeItemsAndGraphData.values();
+    foreach(GraphData* data, graphData)
+        delete data;
+
+    hashWithTreeItemsAndGraphData.clear();
     delete CVCurves;
     delete customPlot;
+    delete convolutionStatusBarDialog;
     delete ui;
 }
 
-void MainWindow::drawPlot(CVCurveData *CVData, QString plotType)
+void MainWindow::drawPlot(QTreeWidgetItem *item)
 {
-    getGraphDataFromCVDataAndPlotType(CVData, plotType);
+    makeAllGraphsInvisible();
 
-    curvePlot->setData(graphData->xValues, graphData->yValues);
-    customPlot->xAxis->setLabel(graphData->xAxisCaption);
-    customPlot->yAxis->setLabel(graphData->yAxisCaption);
+    GraphData graphData = *hashWithTreeItemsAndGraphData.value(item);
 
-    customPlot->xAxis->setRange(CVData->axisRanges.value(plotType).x_min(), CVData->axisRanges.value(plotType).x_max());
-    customPlot->yAxis->setRange(CVData->axisRanges.value(plotType).y_min(), CVData->axisRanges.value(plotType).y_max());
+    if (graphData.treeItemType == GraphData::Folder)
+    {
+        customPlot->xAxis->setLabel(QString());
+        customPlot->yAxis->setLabel(QString());
+        return;
+    }
+
+    customPlot->xAxis->setLabel(*(graphData.xAxisCaption));
+    customPlot->yAxis->setLabel(*(graphData.yAxisCaption));
+    customPlot->xAxis->setRange(graphData.xRange);
+    customPlot->yAxis->setRange(graphData.yRange);
+
+    if (graphData.treeItemType == GraphData::SinglePlot)
+    {
+        curvePlot->setVisible(true);
+        smoothedCurvePlot->setVisible(true);
+        curvePlot->setData(*(graphData.xValues), *(graphData.yValues));
+    }
+    else if (graphData.treeItemType == GraphData::Stack)
+    {
+        foreach(QCPCurve *plot, *(mapWithStacks.value(item)))
+        {
+            plot->setVisible(true);
+        }
+    }
+
     customPlot->replot();
 }
 
 void MainWindow::on_actionImport_ASCII_triggered()
 {
+    ui->treeWidget->clearSelection();
+
     QStringList files = QFileDialog::getOpenFileNames(this, "Add files", lastOpenDir, "TXT file; *.txt");
 
     if (files.isEmpty()) return;
@@ -225,7 +275,6 @@ void MainWindow::on_actionImport_ASCII_triggered()
         if (file.open(QIODevice::ReadOnly))
         {
             CVCurves->append(new CVCurveData(files.at(i)));
-            //CVCurves->last()->moveToThread(CVCurveDataThread);
 
             QTextStream streamFromFile(&file);
             while (!file.atEnd())
@@ -234,25 +283,60 @@ void MainWindow::on_actionImport_ASCII_triggered()
             CVCurves->last()->processFileBody();
 
             connect(CVCurves->last(), SIGNAL(progressWasChanged(int)),
-                    this, SLOT(progressBarUpdate(int)));
+                    convolutionStatusBarDialog, SLOT(progressBarUpdate(int)));
 
             QTreeWidgetItem *item = new QTreeWidgetItem(ui->treeWidget);
             item->setText(0, CVCurves->last()->fileName());
             item->setText(1, QString::number(CVCurves->last()->scanRate()));
-            item->setText(2, QString::number(CVCurves->last()->E().size()));
+            item->setText(2, QString::number(CVCurves->last()->E()->size()));
             item->setFlags(item->flags() | Qt::ItemIsEditable | Qt::ItemIsDragEnabled);
+
+            hashWithTreeItemsAndGraphData.insert(item, new GraphData(CVCurves->last(),
+                                                                     CVCurves->last()->E(), CVCurves->last()->I(),
+                                                                     &EAxisCaption, &IAxisCaption,
+                                                                     QCPRange(CVCurves->last()->ERangeMin(), CVCurves->last()->ERangeMax()),
+                                                                     QCPRange(CVCurves->last()->IRangeMin(), CVCurves->last()->IRangeMax()),
+                                                                     CVCurveData::I_vs_E,
+                                                                     true));
 
             if (CVCurves->last()->EIsAvaliable() && CVCurves->last()->IIsAvaliable())
             {
                 QTreeWidgetItem *child = new QTreeWidgetItem(item);
                 child->setText(0, CVCurveData::PlotTypes.at(CVCurveData::I_vs_E));
                 item->addChild(child);
+
+                hashWithTreeItemsAndGraphData.insert(child, new GraphData(CVCurves->last(),
+                                                                          CVCurves->last()->E(), CVCurves->last()->I(),
+                                                                          &EAxisCaption, &IAxisCaption,
+                                                                          QCPRange(CVCurves->last()->ERangeMin(), CVCurves->last()->ERangeMax()),
+                                                                          QCPRange(CVCurves->last()->IRangeMin(), CVCurves->last()->IRangeMax()),
+                                                                          CVCurveData::I_vs_E));
             }
             if (CVCurves->last()->EIsAvaliable() && CVCurves->last()->TIsAvaliable())
             {
                 QTreeWidgetItem *child = new QTreeWidgetItem(item);
                 child->setText(0, CVCurveData::PlotTypes.at(CVCurveData::E_vs_T));
                 item->addChild(child);
+
+                hashWithTreeItemsAndGraphData.insert(child, new GraphData(CVCurves->last(),
+                                                                          CVCurves->last()->T(), CVCurves->last()->E(),
+                                                                          &TAxisCaption, &EAxisCaption,
+                                                                          QCPRange(CVCurves->last()->TRangeMin(), CVCurves->last()->TRangeMax()),
+                                                                          QCPRange(CVCurves->last()->ERangeMin(), CVCurves->last()->ERangeMax()),
+                                                                          CVCurveData::E_vs_T));
+            }
+            if (CVCurves->last()->TIsAvaliable() && CVCurves->last()->IIsAvaliable())
+            {
+                QTreeWidgetItem *child = new QTreeWidgetItem(item);
+                child->setText(0, CVCurveData::PlotTypes.at(CVCurveData::I_vs_T));
+                item->addChild(child);
+
+                hashWithTreeItemsAndGraphData.insert(child, new GraphData(CVCurves->last(),
+                                                                          CVCurves->last()->T(), CVCurves->last()->I(),
+                                                                          &TAxisCaption, &IAxisCaption,
+                                                                          QCPRange(CVCurves->last()->TRangeMin(), CVCurves->last()->TRangeMax()),
+                                                                          QCPRange(CVCurves->last()->IRangeMin(), CVCurves->last()->IRangeMax()),
+                                                                          CVCurveData::I_vs_T));
             }
 
             ui->treeWidget->addTopLevelItem(item);
@@ -263,14 +347,12 @@ void MainWindow::on_actionImport_ASCII_triggered()
                                                "Number of data points: " + QString::number(CVCurves->last()->sizeOfE()) + "\n"
                                                "Avaliable parameters: " + CVCurves->last()->avaliableInputParameters() + "\n");
 
-            curvePlot->setData(CVCurves->last()->E(), CVCurves->last()->I());
-            customPlot->xAxis->setRange(CVCurves->last()->ERangeMin(), CVCurves->last()->ERangeMax());
-            customPlot->yAxis->setRange(CVCurves->last()->IRangeMin(), CVCurves->last()->IRangeMax());
+            curvePlot->setData(*(hashWithTreeItemsAndGraphData.value(item)->xValues), *(hashWithTreeItemsAndGraphData.value(item)->yValues));
+            customPlot->xAxis->setRange(hashWithTreeItemsAndGraphData.value(item)->xRange);
+            customPlot->yAxis->setRange(hashWithTreeItemsAndGraphData.value(item)->yRange);
             customPlot->replot();
         }
     }
-
-    //CVCurveDataThread->start();
 
     int itemsCount = ui->treeWidget->topLevelItemCount() - 1;
     ui->treeWidget->topLevelItem(itemsCount)->setSelected(true);
@@ -292,61 +374,113 @@ void MainWindow::initializePlotContextMenu()
 void MainWindow::SavGolFilterApply(int m, int pol_order)
 {
     QTreeWidgetItem *currentItem = ui->treeWidget->currentItem();
-    CVCurveData::PlotType plotType = CVCurveData::I_vs_E;
-    if (!currentItem->childCount())
-    {
-        plotType = static_cast<CVCurveData::PlotType>(CVCurveData::PlotTypes.indexOf(currentItem->text(0)));
-        currentItem = currentItem->parent();
-    }
+    CVCurveData::PlotType plotType = hashWithTreeItemsAndGraphData.value(currentItem)->plotType;
+    hashWithTreeItemsAndGraphData.value(currentItem)->CVData->SavGolFilter(m, pol_order, plotType);
 
-    for (QVector<CVCurveData*>::iterator it = CVCurves->begin(); it != CVCurves->end(); it++)
-    {
-        if (currentItem->text(0) == (*it)->fileName())
-        {
-            (*it)->SavGolFilter(m, pol_order, plotType);
+    if (plotType == CVCurveData::I_vs_E)
+        smoothedCurvePlot->setData(*(hashWithTreeItemsAndGraphData.value(currentItem)->CVData->E()), *(hashWithTreeItemsAndGraphData.value(currentItem)->CVData->Ismoothed()));
+    else if (plotType == CVCurveData::E_vs_T)
+        smoothedCurvePlot->setData(*(hashWithTreeItemsAndGraphData.value(currentItem)->CVData->T()), *(hashWithTreeItemsAndGraphData.value(currentItem)->CVData->Esmoothed()));
 
-            if (plotType == CVCurveData::I_vs_E)
-                smoothedCurvePlot->setData((*it)->E(), (*it)->Ismoothed());
-            else if (plotType == CVCurveData::E_vs_T)
-                smoothedCurvePlot->setData((*it)->T(), (*it)->Esmoothed());
+    customPlot->replot();
 
-            customPlot->replot();
-            break;
-        }
-    }
+
+
+//    CVCurveData::PlotType plotType = CVCurveData::I_vs_E;
+//    if (!currentItem->childCount())
+//    {
+//        plotType = static_cast<CVCurveData::PlotType>(CVCurveData::PlotTypes.indexOf(currentItem->text(0)));
+//        currentItem = currentItem->parent();
+//    }
+
+//    for (QVector<CVCurveData*>::iterator it = CVCurves->begin(); it != CVCurves->end(); it++)
+//    {
+//        if (currentItem->text(0) == (*it)->fileName())
+//        {
+//            (*it)->SavGolFilter(m, pol_order, plotType);
+
+//            if (plotType == CVCurveData::I_vs_E)
+//                smoothedCurvePlot->setData((*it)->E(), (*it)->Ismoothed());
+//            else if (plotType == CVCurveData::E_vs_T)
+//                smoothedCurvePlot->setData((*it)->T(), (*it)->Esmoothed());
+
+//            customPlot->replot();
+//            break;
+//        }
+//    }
+
 }
 
-void MainWindow::convolutionApply(int Ru, int Cd)
+void MainWindow::convolutionApply(QTreeWidgetItem *currentItem)
 {
-    QTreeWidgetItem *newChild_si = new QTreeWidgetItem();
-    newChild_si->setText(0, CVCurveData::PlotTypes.at(CVCurveData::I_vs_E_semiint));
-    QTreeWidgetItem *newChild_sd = new QTreeWidgetItem();
-    newChild_sd->setText(0, CVCurveData::PlotTypes.at(CVCurveData::I_vs_E_semidiff));
+    if (!currentItem->childCount()) currentItem = currentItem->parent();
+    CVCurveData *CVData = hashWithTreeItemsAndGraphData.value(currentItem)->CVData;
 
-    QTreeWidgetItem *currentItem = ui->treeWidget->currentItem();
-    if (!currentItem->childCount())
-        currentItem = currentItem->parent();
+    convolutionStatusBarDialog->setFileName(currentItem->text(0));
+    convolutionStatusBarDialog->show();
 
-    for (QVector<CVCurveData*>::iterator it = CVCurves->begin(); it != CVCurves->end(); it++)
+    unsigned long int start_time = clock();
+
+    //qDebug() << "Main " << QThread::currentThread();
+
+    if (CVData->convolute())
     {
-        if (currentItem->text(0) == (*it)->fileName())
-        {
-            if ((*it)->startConvolution())
-            {
-                currentItem->addChild(newChild_si);
-                currentItem->addChild(newChild_sd);
-                ui->treeWidget->currentItem()->setSelected(false);
-                currentItem->setExpanded(true);
-                newChild_sd->setSelected(true);
-                ui->treeWidget->setCurrentItem(newChild_sd);
-                ui->treeWidget->setFocus();
-                drawPlot(*it, CVCurveData::PlotTypes.at(CVCurveData::I_vs_E_semidiff));
-            }
-            else
-                QMessageBox::warning(this, "", "Something went wrong!");
-            break;
-        }
+        unsigned long int end_time = clock();
+        unsigned long int exec_time = end_time - start_time;
+
+        convolutionStatusBarDialog->close();
+
+        ui->plainTextEdit->appendPlainText("Convolution of \"" + currentItem->text(0) + "\" completed in " + QString::number((double)exec_time/1000.0) + " seconds.");
+        ui->plainTextEdit->appendPlainText("Convolution parameters:");
+        ui->plainTextEdit->appendPlainText("\tRu = " + QString::number(generalSettingsDialog->RuDefaultValue));
+        ui->plainTextEdit->appendPlainText("\tCd = " + QString::number(generalSettingsDialog->CdDefaultValue) + "\n");
+
+        QTreeWidgetItem *newChild_si = new QTreeWidgetItem(currentItem);
+        newChild_si->setText(0, CVCurveData::PlotTypes.at(CVCurveData::I_vs_E_semiint));
+        currentItem->addChild(newChild_si);
+        hashWithTreeItemsAndGraphData.insert(newChild_si, new GraphData(CVData,
+                                                                        CVData->E(), CVData->Isi(),
+                                                                        &EAxisCaption, &IsiAxisCaption,
+                                                                        QCPRange(CVData->ERangeMin(), CVData->ERangeMax()), QCPRange(CVData->IsiRangeMin(), CVData->IsiRangeMax()),
+                                                                        CVCurveData::I_vs_E_semiint));
+
+        QTreeWidgetItem *newChild_sd = new QTreeWidgetItem(currentItem);
+        newChild_sd->setText(0, CVCurveData::PlotTypes.at(CVCurveData::I_vs_E_semidiff));
+        currentItem->addChild(newChild_sd);
+        hashWithTreeItemsAndGraphData.insert(newChild_sd, new GraphData(CVData,
+                                                                        CVData->E(), CVData->Isd(),
+                                                                        &EAxisCaption, &IsdAxisCaption,
+                                                                        QCPRange(CVData->ERangeMin(), CVData->ERangeMax()), QCPRange(CVData->IsdRangeMin(), CVData->IsdRangeMax()),
+                                                                        CVCurveData::I_vs_E_semidiff));
+
+        ui->treeWidget->clearSelection();
+        currentItem->setExpanded(true);
+        newChild_sd->setSelected(true);
+        ui->treeWidget->setCurrentItem(newChild_sd);
+        ui->treeWidget->setFocus();
+        drawPlot(newChild_sd);
     }
+    else
+    {
+        convolutionStatusBarDialog->close();
+        QMessageBox::warning(this, "Error", "Something went wrong during convolution operation!");
+    }
+
+//    if (!currentItem->childCount())
+//        currentItem = currentItem->parent();
+
+//    for (QVector<CVCurveData*>::iterator it = CVCurves->begin(); it != CVCurves->end(); it++)
+//    {
+//        if (currentItem->text(0) == (*it)->fileName())
+//        {
+//            if ((*it)->startConvolution())
+//            {
+
+//            }
+
+//            break;
+//        }
+//    }
 }
 
 void MainWindow::saveSettings()
@@ -380,101 +514,128 @@ void MainWindow::on_DefaultViewButton_clicked()
     if (ui->treeWidget->selectedItems().isEmpty()) return;
 
     QTreeWidgetItem *currentItem = ui->treeWidget->currentItem();
+    customPlot->xAxis->setRange(hashWithTreeItemsAndGraphData.value(currentItem)->xRange);
+    customPlot->yAxis->setRange(hashWithTreeItemsAndGraphData.value(currentItem)->yRange);
+    customPlot->replot();
 
-    if (currentItem->childCount())
-    {
-        for (QVector<CVCurveData*>::iterator it = CVCurves->begin(); it != CVCurves->end(); it++)
-        {
-            if (currentItem->text(0) == (*it)->fileName())
-            {
-                customPlot->xAxis->setRange((*it)->ERangeMin(), (*it)->ERangeMax());
-                customPlot->yAxis->setRange((*it)->IRangeMin(), (*it)->IRangeMax());
-                customPlot->replot();
-                break;
-            }
-        }
-        return;
-    }
+//    if (currentItem->childCount())
+//    {
+//        for (QVector<CVCurveData*>::iterator it = CVCurves->begin(); it != CVCurves->end(); it++)
+//        {
+//            if (currentItem->text(0) == (*it)->fileName())
+//            {
+//                customPlot->xAxis->setRange((*it)->ERangeMin(), (*it)->ERangeMax());
+//                customPlot->yAxis->setRange((*it)->IRangeMin(), (*it)->IRangeMax());
+//                customPlot->replot();
+//                break;
+//            }
+//        }
+//        return;
+//    }
 
-    for (QVector<CVCurveData*>::iterator it = CVCurves->begin(); it != CVCurves->end(); it++)
-        if ((*it)->fileName() == currentItem->parent()->text(0))
-        {
-            if (currentItem->text(0) == CVCurveData::PlotTypes.at(CVCurveData::I_vs_E))
-            {
-                customPlot->xAxis->setRange((*it)->ERangeMin(), (*it)->ERangeMax());
-                customPlot->yAxis->setRange((*it)->IRangeMin(), (*it)->IRangeMax());
-                customPlot->replot();
-                break;
-            }
-            else if (currentItem->text(0) == CVCurveData::PlotTypes.at(CVCurveData::E_vs_T))
-            {
-                customPlot->xAxis->setRange((*it)->TRangeMin(), (*it)->TRangeMax());
-                customPlot->yAxis->setRange((*it)->ERangeMin(), (*it)->ERangeMax());
-                customPlot->replot();
-                break;
-            }
-            else if (currentItem->text(0) == CVCurveData::PlotTypes.at(CVCurveData::I_vs_E_semiint))
-            {
-                customPlot->xAxis->setRange((*it)->ERangeMin(), (*it)->ERangeMax());
-                customPlot->yAxis->setRange((*it)->IsiRangeMin(), (*it)->IsiRangeMax());
-                customPlot->replot();
-                break;
-            }
-            else if (currentItem->text(0) == CVCurveData::PlotTypes.at(CVCurveData::I_vs_E_semidiff))
-            {
-                customPlot->xAxis->setRange((*it)->ERangeMin(), (*it)->ERangeMax());
-                customPlot->yAxis->setRange((*it)->IsdRangeMin(), (*it)->IsdRangeMax());
-                customPlot->replot();
-                break;
-            }
-            else if (currentItem->text(0) == CVCurveData::PlotTypes.at(CVCurveData::I_vs_E_smoothed))
-            {
-                customPlot->xAxis->setRange((*it)->ERangeMin(), (*it)->ERangeMax());
-                customPlot->yAxis->setRange((*it)->IRangeMin(), (*it)->IRangeMax());
-                customPlot->replot();
-                break;
-            }
-            else if (currentItem->text(0) == CVCurveData::PlotTypes.at(CVCurveData::E_vs_T_smoothed))
-            {
-                customPlot->xAxis->setRange((*it)->TRangeMin(), (*it)->TRangeMax());
-                customPlot->yAxis->setRange((*it)->ERangeMin(), (*it)->ERangeMax());
-                customPlot->replot();
-                break;
-            }
-        }
+//    for (QVector<CVCurveData*>::iterator it = CVCurves->begin(); it != CVCurves->end(); it++)
+//        if ((*it)->fileName() == currentItem->parent()->text(0))
+//        {
+//            if (currentItem->text(0) == CVCurveData::PlotTypes.at(CVCurveData::I_vs_E))
+//            {
+//                customPlot->xAxis->setRange((*it)->ERangeMin(), (*it)->ERangeMax());
+//                customPlot->yAxis->setRange((*it)->IRangeMin(), (*it)->IRangeMax());
+//                customPlot->replot();
+//                break;
+//            }
+//            else if (currentItem->text(0) == CVCurveData::PlotTypes.at(CVCurveData::E_vs_T))
+//            {
+//                customPlot->xAxis->setRange((*it)->TRangeMin(), (*it)->TRangeMax());
+//                customPlot->yAxis->setRange((*it)->ERangeMin(), (*it)->ERangeMax());
+//                customPlot->replot();
+//                break;
+//            }
+//            else if (currentItem->text(0) == CVCurveData::PlotTypes.at(CVCurveData::I_vs_E_semiint))
+//            {
+//                customPlot->xAxis->setRange((*it)->ERangeMin(), (*it)->ERangeMax());
+//                customPlot->yAxis->setRange((*it)->IsiRangeMin(), (*it)->IsiRangeMax());
+//                customPlot->replot();
+//                break;
+//            }
+//            else if (currentItem->text(0) == CVCurveData::PlotTypes.at(CVCurveData::I_vs_E_semidiff))
+//            {
+//                customPlot->xAxis->setRange((*it)->ERangeMin(), (*it)->ERangeMax());
+//                customPlot->yAxis->setRange((*it)->IsdRangeMin(), (*it)->IsdRangeMax());
+//                customPlot->replot();
+//                break;
+//            }
+//            else if (currentItem->text(0) == CVCurveData::PlotTypes.at(CVCurveData::I_vs_E_smoothed))
+//            {
+//                customPlot->xAxis->setRange((*it)->ERangeMin(), (*it)->ERangeMax());
+//                customPlot->yAxis->setRange((*it)->IRangeMin(), (*it)->IRangeMax());
+//                customPlot->replot();
+//                break;
+//            }
+//            else if (currentItem->text(0) == CVCurveData::PlotTypes.at(CVCurveData::E_vs_T_smoothed))
+//            {
+//                customPlot->xAxis->setRange((*it)->TRangeMin(), (*it)->TRangeMax());
+//                customPlot->yAxis->setRange((*it)->ERangeMin(), (*it)->ERangeMax());
+//                customPlot->replot();
+//                break;
+//            }
+//        }
 }
 
 void MainWindow::treeWidgetItemPressed(QTreeWidgetItem *item, int column)
 {
     ui->ConvolutionButton->setEnabled(false);
-    fileNameBuffer = item->text(0);
+    CVCurveData::PlotType plotType = hashWithTreeItemsAndGraphData.value(item)->plotType;
+    if (plotType == CVCurveData::I_vs_E || plotType == CVCurveData::I_vs_E_smoothed)
+        ui->ConvolutionButton->setEnabled(true);
 
-    if (item->childCount())
-    {
-        for (QVector<CVCurveData*>::iterator it = CVCurves->begin(); it != CVCurves->end(); it++)
-        {
-            if (item->text(0) == (*it)->fileName())
-            {
-                drawPlot(*it, CVCurveData::PlotTypes.at(CVCurveData::I_vs_E));
-                ui->ConvolutionButton->setEnabled(true);
-                break;
-            }
-        }
-        return;
-    }
 
-    QString parentName = item->parent()->text(0);
-    QString itemName = item->text(0);
+    drawPlot(item);
 
-    if (itemName.contains(CVCurveData::PlotTypes.at(CVCurveData::I_vs_E))) ui->ConvolutionButton->setEnabled(true);
+    // fileNameBuffer = item->text(0);  // DELETE
 
-    for (QVector<CVCurveData*>::iterator it = CVCurves->begin(); it != CVCurves->end(); it++)
-        if ((*it)->fileName() == parentName) drawPlot(*it, itemName);
+    // makeAllGraphsInvisible();
+
+//    if (mapWithStacks.contains(item))
+//    {
+//        foreach (QCPCurve *plot, *(mapWithStacks.value(item))) {
+//            plot->setVisible(true);
+//        }
+//        customPlot->replot();
+//        return;
+//    }
+
+//    curvePlot->setVisible(true);
+//    smoothedCurvePlot->setVisible(true);
+
+
+
+//    if (item->childCount())
+//    {
+//        for (QVector<CVCurveData*>::iterator it = CVCurves->begin(); it != CVCurves->end(); it++)
+//        {
+//            if (item->text(0) == (*it)->fileName())
+//            {
+//                drawPlot(*it, CVCurveData::PlotTypes.at(CVCurveData::I_vs_E));
+//                ui->ConvolutionButton->setEnabled(true);
+//                break;
+//            }
+//        }
+//        return;
+//    }
+
+//    QString parentName = item->parent()->text(0);
+//    QString itemName = item->text(0);
+
+//    if (itemName.contains(CVCurveData::PlotTypes.at(CVCurveData::I_vs_E))) ui->ConvolutionButton->setEnabled(true);
+
+//    for (QVector<CVCurveData*>::iterator it = CVCurves->begin(); it != CVCurves->end(); it++)
+//        if ((*it)->fileName() == parentName) drawPlot(*it, itemName);
 }
 
 void MainWindow::updateFileNamesListFromTreeWidget()
 {
     fileNamesListFromTreeWidget.clear();
+
     int count = ui->treeWidget->topLevelItemCount();
     for (int i = 0; i < count; i++)
         fileNamesListFromTreeWidget.append(ui->treeWidget->topLevelItem(i)->text(0));
@@ -672,12 +833,8 @@ void MainWindow::smoothSettingsDialogWasClosed(bool buttonType)
     if (buttonType) // if OK clicked
     {
         QTreeWidgetItem *currentItem = ui->treeWidget->currentItem();
-        CVCurveData::PlotType plotType = CVCurveData::I_vs_E;
-        if (!currentItem->childCount())
-        {
-            plotType = static_cast<CVCurveData::PlotType>(CVCurveData::PlotTypes.indexOf(currentItem->text(0)));
-            currentItem = currentItem->parent();
-        }
+        CVCurveData::PlotType plotType = hashWithTreeItemsAndGraphData.value(currentItem)->plotType;
+        CVCurveData *CVData = hashWithTreeItemsAndGraphData.value(currentItem)->CVData;
 
         smoothSettingsDialog->hide();
         smoothedCurvePlot->setData(QVector<double>(), QVector<double>());
@@ -686,16 +843,34 @@ void MainWindow::smoothSettingsDialogWasClosed(bool buttonType)
         QTreeWidgetItem *item = new QTreeWidgetItem();
 
         if (plotType == CVCurveData::I_vs_E)
+        {
             item->setText(0, CVCurveData::PlotTypes.at(CVCurveData::I_vs_E_smoothed));
+            hashWithTreeItemsAndGraphData.insert(item, new GraphData(CVData,
+                                                                     CVData->E(), CVData->Ismoothed(),
+                                                                     &EAxisCaption, &IAxisCaption,
+                                                                     hashWithTreeItemsAndGraphData.value(currentItem)->xRange,
+                                                                     hashWithTreeItemsAndGraphData.value(currentItem)->yRange,
+                                                                     CVCurveData::I_vs_E_smoothed));
+        }
         else if (plotType == CVCurveData::E_vs_T)
+        {
             item->setText(0, CVCurveData::PlotTypes.at(CVCurveData::E_vs_T_smoothed));
-
+            hashWithTreeItemsAndGraphData.insert(item, new GraphData(CVData,
+                                                                     CVData->T(), CVData->Esmoothed(),
+                                                                     &TAxisCaption, &EAxisCaption,
+                                                                     hashWithTreeItemsAndGraphData.value(currentItem)->xRange,
+                                                                     hashWithTreeItemsAndGraphData.value(currentItem)->yRange,
+                                                                     CVCurveData::E_vs_T_smoothed));
+        }
 
         if (item->text(0) == QString()) return;
 
-        currentItem->addChild(item);
+        if (currentItem->childCount())
+            currentItem->addChild(item);
+        else
+            currentItem->parent()->addChild(item);
     }
-    else            // if Cancel clicked
+    else  // if Cancel clicked
     {
         smoothSettingsDialog->hide();
         smoothedCurvePlot->setData(QVector<double>(), QVector<double>());
@@ -703,94 +878,177 @@ void MainWindow::smoothSettingsDialogWasClosed(bool buttonType)
     }
 }
 
-void MainWindow::createPlotStack(QStringList fileNames, QString plotType)
+void MainWindow::createPlotStack()
 {
+    QList<QTreeWidgetItem*> selectedItems = ui->treeWidget->selectedItems();
+    int sizeOfStack = selectedItems.size();
+    CVCurveData::PlotType plotType = hashWithTreeItemsAndGraphData.value(selectedItems.first())->plotType;
+    QString plotTypeString = CVCurveData::PlotTypes.at(plotType);
+
+    QString *xAxisStackLabel = hashWithTreeItemsAndGraphData.value(selectedItems.first())->xAxisCaption;
+    QString *yAxisStackLabel = hashWithTreeItemsAndGraphData.value(selectedItems.first())->yAxisCaption;
+
+    QList<QCPRange> xAxisRanges;
+    QList<QCPRange> yAxisRanges;
+    QCPRange xAxisStackRange;
+    QCPRange yAxisStackRange;
+
+    foreach (QTreeWidgetItem *item, selectedItems) {
+        xAxisRanges.append(hashWithTreeItemsAndGraphData.value(item)->xRange);
+        yAxisRanges.append(hashWithTreeItemsAndGraphData.value(item)->yRange);
+    }
+
+    xAxisStackRange = findMaximalQCPRange(xAxisRanges);
+    yAxisStackRange = findMaximalQCPRange(yAxisRanges);
+
     QTreeWidgetItem *stackItem = new QTreeWidgetItem(ui->treeWidget);
-    stackItem->setText(0, "Stack (" + plotType + ")");
+    stackItem->setText(0, "Stack [" + plotTypeString + "]");
+    stackItem->setTextColor(0, QColor(0, 0, 255));
     ui->treeWidget->addTopLevelItem(stackItem);
-    //ui->treeWidget->setCurrentItem(stackItem);
+
+    hashWithTreeItemsAndGraphData.insert(stackItem, new GraphData(xAxisStackLabel, yAxisStackLabel,
+                                                                  xAxisStackRange, yAxisStackRange,
+                                                                  GraphData::Stack));
 
     makeAllGraphsInvisible();
+    QList<QCPCurve*> *plotList = new QList<QCPCurve*>();
+    GradientColor gradient(sizeOfStack);
+    QList<QColor> gradientColors = gradient.getGradientColorsList();
 
-    mapWithStacks.insert(stackItem, new QList<QCPCurve*>());
-
-    //rgb(185,43,39)
-    //rgb(21,101,192)
-    int r1 = 252, g1 = 70, b1 = 107;
-    int r2 = 63, g2 = 94, b2 = 251;
-
-    for (int i = 0; i < fileNames.size(); i++)
+    for (int i = 0; i < sizeOfStack; i++)
     {
-        double pointPos = (double)i/(fileNames.size() - 1);
-
         QCPCurve *plot = new QCPCurve(customPlot->xAxis, customPlot->yAxis);
-
-        for (QVector<CVCurveData*>::iterator it = CVCurves->begin(); it != CVCurves->end(); it++)
-            if ((*it)->fileName() == fileNames.at(i))
-            {
-                getGraphDataFromCVDataAndPlotType(*it, plotType);
-                break;
-            }
-
-        plot->addData(graphData->xValues, graphData->yValues);
+        plot->addData(*(hashWithTreeItemsAndGraphData.value(selectedItems.at(i))->xValues), *(hashWithTreeItemsAndGraphData.value(selectedItems.at(i))->yValues));
 
         QPen pen = plot->pen();
-        pen.setColor(QColor(r1 + (pointPos*(r2-r1)), g1 + (pointPos*(g2-g1)), b1 + (pointPos*(b2-b1))));
+        pen.setColor(gradientColors.at(i));
         pen.setWidth(generalSettingsDialog->plotLineWidth);
         plot->setPen(pen);
-        mapWithStacks.value(stackItem)->append(plot);
+        plotList->append(plot);
     }
 
-    customPlot->replot();
+    mapWithStacks.insert(stackItem, plotList);
+    drawPlot(stackItem);
+    ui->treeWidget->clearSelection();
+    ui->treeWidget->setCurrentItem(stackItem);
 
+//    QTreeWidgetItem *stackItem = new QTreeWidgetItem(ui->treeWidget);
+//    stackItem->setText(0, "Stack [" + plotType + "]");
+//    stackItem->setTextColor(0, QColor(0, 0, 255));
+//    ui->treeWidget->addTopLevelItem(stackItem);
+//    //ui->treeWidget->setCurrentItem(stackItem);
 
+//    makeAllGraphsInvisible();
+
+//    QList<QCPCurve*> *plotList = new QList<QCPCurve*>();
+
+//    //rgb(168,0,119)
+//    //rgb(102,255,0)
+//    int r1 = 168, g1 = 0, b1 = 119;
+//    int r2 = 102, g2 = 255, b2 = 0;
+
+//    for (int i = 0; i < fileNames.size(); i++)
+//    {
+//        double pointPos = (double)i/(fileNames.size() - 1);
+
+//        QCPCurve *plot = new QCPCurve(customPlot->xAxis, customPlot->yAxis);
+
+//        for (QVector<CVCurveData*>::iterator it = CVCurves->begin(); it != CVCurves->end(); it++)
+//            if ((*it)->fileName() == fileNames.at(i))
+//            {
+//                // (!) getGraphDataFromCVDataAndPlotType(*it, plotType);
+//                break;
+//            }
+
+//        // (!) plot->addData(graphData->xValues, graphData->yValues);
+
+//        QPen pen = plot->pen();
+//        pen.setColor(QColor(r1 + (pointPos*(r2-r1)), g1 + (pointPos*(g2-g1)), b1 + (pointPos*(b2-b1))));
+//        pen.setWidth(generalSettingsDialog->plotLineWidth);
+//        plot->setPen(pen);
+//        plotList->append(plot);
+//    }
+
+//    mapWithStacks.insert(stackItem, plotList);
+//    customPlot->replot();
 }
 
-void MainWindow::getGraphDataFromCVDataAndPlotType(CVCurveData *CVData, QString plotType)
+QCPRange MainWindow::findMaximalQCPRange(QList<QCPRange> ranges)
 {
-    if (plotType == CVCurveData::PlotTypes.at(CVCurveData::I_vs_E))
+    QCPRange maximalRange = ranges.first();
+
+    foreach(QCPRange range, ranges)
     {
-        graphData->xValues = CVData->E();
-        graphData->yValues = CVData->I();
-        graphData->xAxisCaption = "E, V";
-        graphData->yAxisCaption = "I, mA";
+        if (range.upper > maximalRange.upper)
+            maximalRange.upper = range.upper;
+        if (range.lower < maximalRange.lower)
+            maximalRange.lower = range.lower;
     }
-    else if (plotType == CVCurveData::PlotTypes.at(CVCurveData::E_vs_T))
+
+    return maximalRange;
+}
+
+void MainWindow::generalSettingsDialogClosed()
+{
+    foreach(CVCurveData *CVData, *CVCurves)
+        CVData->correctPotentialValues(generalSettingsDialog);
+
+    EAxisCaption = generalSettingsDialog->potentialAxisCaption;
+}
+
+void MainWindow::convoluteMultipleFiles(QList<QTreeWidgetItem*> itemsForConvolutionList)
+{
+    foreach(QTreeWidgetItem *item, itemsForConvolutionList)
     {
-        graphData->xValues = CVData->T();
-        graphData->yValues = CVData->E();
-        graphData->xAxisCaption = "t, s";
-        graphData->yAxisCaption = "E, V";
-    }
-    else if (plotType == CVCurveData::PlotTypes.at(CVCurveData::I_vs_E_semiint))
-    {
-        graphData->xValues = CVData->Esmoothed();
-        graphData->yValues = CVData->Isi();
-        graphData->xAxisCaption = "E, V";
-        graphData->yAxisCaption = "I (convoluted)";
-    }
-    else if (plotType == CVCurveData::PlotTypes.at(CVCurveData::I_vs_E_semidiff))
-    {
-        graphData->xValues = CVData->Esmoothed();
-        graphData->yValues = CVData->Isd();
-        graphData->xAxisCaption = "E, V";
-        graphData->yAxisCaption = "I (semidifferential)";
-    }
-    else if (plotType == CVCurveData::PlotTypes.at(CVCurveData::I_vs_E_smoothed))
-    {
-        graphData->xValues = CVData->E();
-        graphData->yValues = CVData->Ismoothed();
-        graphData->xAxisCaption = "E, V";
-        graphData->yAxisCaption = "I, mA";
-    }
-    else if (plotType == CVCurveData::PlotTypes.at(CVCurveData::E_vs_T_smoothed))
-    {
-        graphData->xValues = CVData->T();
-        graphData->yValues = CVData->Esmoothed();
-        graphData->xAxisCaption = "t, s";
-        graphData->yAxisCaption = "E, V";
+        convolutionApply(item);
     }
 }
+
+//void MainWindow::getGraphDataFromCVDataAndPlotType(CVCurveData *CVData, QString plotType)
+//{
+//    if (plotType == CVCurveData::PlotTypes.at(CVCurveData::I_vs_E))
+//    {
+//        graphData->xValues = CVData->E();
+//        graphData->yValues = CVData->I();
+//        graphData->xAxisCaption = "E, V";
+//        graphData->yAxisCaption = "I, mA";
+//    }
+//    else if (plotType == CVCurveData::PlotTypes.at(CVCurveData::E_vs_T))
+//    {
+//        graphData->xValues = CVData->T();
+//        graphData->yValues = CVData->E();
+//        graphData->xAxisCaption = "t, s";
+//        graphData->yAxisCaption = "E, V";
+//    }
+//    else if (plotType == CVCurveData::PlotTypes.at(CVCurveData::I_vs_E_semiint))
+//    {
+//        graphData->xValues = CVData->Esmoothed();
+//        graphData->yValues = CVData->Isi();
+//        graphData->xAxisCaption = "E, V";
+//        graphData->yAxisCaption = "I (convoluted)";
+//    }
+//    else if (plotType == CVCurveData::PlotTypes.at(CVCurveData::I_vs_E_semidiff))
+//    {
+//        graphData->xValues = CVData->Esmoothed();
+//        graphData->yValues = CVData->Isd();
+//        graphData->xAxisCaption = "E, V";
+//        graphData->yAxisCaption = "I (semidifferential)";
+//    }
+//    else if (plotType == CVCurveData::PlotTypes.at(CVCurveData::I_vs_E_smoothed))
+//    {
+//        graphData->xValues = CVData->E();
+//        graphData->yValues = CVData->Ismoothed();
+//        graphData->xAxisCaption = "E, V";
+//        graphData->yAxisCaption = "I, mA";
+//    }
+//    else if (plotType == CVCurveData::PlotTypes.at(CVCurveData::E_vs_T_smoothed))
+//    {
+//        graphData->xValues = CVData->T();
+//        graphData->yValues = CVData->Esmoothed();
+//        graphData->xAxisCaption = "t, s";
+//        graphData->yAxisCaption = "E, V";
+//    }
+//}
 
 void MainWindow::on_ZoomInButton_clicked()
 {
@@ -831,9 +1089,9 @@ void MainWindow::on_ConvolutionButton_clicked()
 {
     if (ui->treeWidget->selectedItems().isEmpty()) return;
 
-    convolutionSettingsDialog->show();
-
-
+    QTreeWidgetItem *currentItem = ui->treeWidget->currentItem();
+    //convolutionSettingsDialog->show();
+    convolutionApply(currentItem);
 }
 
 void MainWindow::on_SmoothButton_clicked()
@@ -974,34 +1232,61 @@ void MainWindow::on_SelectionButton_clicked()
         deactivateAllControlButtons();
 }
 
-
 void MainWindow::on_actionConvolute_all_triggered()
 {
-    updateFileNamesListFromTreeWidget();
-    convoluteMultipleFilesDialog = new ConvoluteMultipleFilesDialog(&fileNamesListFromTreeWidget, this);
+    // updateFileNamesListFromTreeWidget();
+//    QList<QTreeWidgetItem*> parentItems;
+//    QList<QTreeWidgetItem*> allTreeItems = hashWithTreeItemsAndGraphData.keys();
+//    foreach(QTreeWidgetItem *item, allTreeItems)
+//    {
+//        if (item->childCount())
+//        {
+//            parentItems.append(item);
+//        }
+//    }
+
+    QList<QTreeWidgetItem*> parentItems;
+    QList<QTreeWidgetItem *> allTreeItems = ui->treeWidget->findItems(QString("*"), Qt::MatchWrap | Qt::MatchWildcard | Qt::MatchRecursive);
+    foreach(QTreeWidgetItem *item, allTreeItems)
+    {
+        if (item->childCount())
+        {
+            parentItems.append(item);
+        }
+    }
+
+    convoluteMultipleFilesDialog = new ConvoluteMultipleFilesDialog(parentItems, this);
+    connect(convoluteMultipleFilesDialog, SIGNAL(convoluteButtonClicked(QList<QTreeWidgetItem*>)),
+            this, SLOT(convoluteMultipleFiles(QList<QTreeWidgetItem*>)));
     convoluteMultipleFilesDialog->setWindowModality(Qt::WindowModal);
     convoluteMultipleFilesDialog->show();
 }
 
-
 void MainWindow::on_actionSmooth_all_I_vs_E_triggered()
 {
     updateFileNamesListFromTreeWidget();
-    smoothMultipleFilesDialog = new SmoothMultipleFilesDialog(CVCurves, &fileNamesListFromTreeWidget, this);
+    // smoothMultipleFilesDialog = new SmoothMultipleFilesDialog(CVCurves, &fileNamesListFromTreeWidget, this);
+    smoothMultipleFilesDialog = new SmoothMultipleFilesDialog(&hashWithTreeItemsAndGraphData, this);
     smoothMultipleFilesDialog->setWindowModality(Qt::WindowModal);
     smoothMultipleFilesDialog->show();
 }
 
 void MainWindow::on_treeWidget_itemChanged(QTreeWidgetItem *item, int column)
 {
-    for (QVector<CVCurveData*>::iterator it = CVCurves->begin(); it != CVCurves->end(); it++)
-    {
-        if (fileNameBuffer == (*it)->fileName())
-        {
-            (*it)->changeFileName(item->text(0));
-            break;
-        }
-    }
+    if (column != 0) return;
+    if (item->text(0) == QString() || item->text(0).isEmpty() || item->text(0) == NULL) return;
+    if (!hashWithTreeItemsAndGraphData.contains(item)) return;
+
+    hashWithTreeItemsAndGraphData.value(item)->CVData->changeFileName(item->text(0));
+
+//    for (QVector<CVCurveData*>::iterator it = CVCurves->begin(); it != CVCurves->end(); it++)
+//    {
+//        if (fileNameBuffer == (*it)->fileName())
+//        {
+//            (*it)->changeFileName(item->text(0));
+//            break;
+//        }
+//    }
 }
 
 void MainWindow::renameTableWidgetItem()
@@ -1011,100 +1296,175 @@ void MainWindow::renameTableWidgetItem()
 
 void MainWindow::deleteSingleTreeWidgetItem()
 {
-    if (ui->treeWidget->currentItem()->childCount())
-    {
-        for (int i = 0; i < CVCurves->size(); i++)
-            if (ui->treeWidget->currentItem()->text(0) == CVCurves->at(i)->fileName())
-            {
-                delete CVCurves->takeAt(i);
-                break;
-            }
+    QTreeWidgetItem *currentItem = ui->treeWidget->currentItem();
 
-        if (CVCurves->isEmpty())
+    if (hashWithTreeItemsAndGraphData.value(currentItem)->treeItemType == GraphData::SinglePlot)
+    {
+        if (hashWithTreeItemsAndGraphData.value(currentItem)->isParent)
         {
-            currentItemChangedSlot_deactivator = true;
-            ui->treeWidget->takeTopLevelItem(0);
-            curvePlot->setData(QVector<double>(), QVector<double>());
-            customPlot->replot();
-            currentItemChangedSlot_deactivator = false;
+            CVCurveData *_CVData = hashWithTreeItemsAndGraphData.value(currentItem)->CVData;
+            QList<GraphData*> values = hashWithTreeItemsAndGraphData.values();
+
+            foreach (GraphData *data, values) {
+                if (data->CVData == _CVData)
+                {
+                    QTreeWidgetItem *item = hashWithTreeItemsAndGraphData.key(data);
+                    hashWithTreeItemsAndGraphData.remove(item);
+                    values.removeOne(data);
+                    delete data;
+                }
+            }
+            CVCurves->removeOne(_CVData);
+            delete _CVData;
+            delete currentItem;
             return;
         }
 
-        int itemIndex = ui->treeWidget->indexOfTopLevelItem(ui->treeWidget->currentItem());
-
-        if (itemIndex == ui->treeWidget->topLevelItemCount() - 1)
-            ui->treeWidget->setCurrentItem(ui->treeWidget->topLevelItem(itemIndex - 1));
-        else
-            ui->treeWidget->setCurrentItem(ui->treeWidget->topLevelItem(itemIndex + 1));
-
-        ui->treeWidget->takeTopLevelItem(itemIndex);
+        delete hashWithTreeItemsAndGraphData.value(currentItem);
+        hashWithTreeItemsAndGraphData.remove(currentItem);
+        delete currentItem;
     }
-    else
+    else if (hashWithTreeItemsAndGraphData.value(currentItem)->treeItemType == GraphData::Stack)
     {
-        QTreeWidgetItem *item = ui->treeWidget->currentItem();
-        ui->treeWidget->setCurrentItem(item->parent());
-        delete item;
+
     }
+    else if (hashWithTreeItemsAndGraphData.value(currentItem)->treeItemType == GraphData::Folder)
+    {
+
+    }
+
+//    if (CVCurves->isEmpty())
+//    {
+//        QList<GraphData*> values = hashWithTreeItemsAndGraphData.values();
+//        while (!values.isEmpty())
+//            delete values.takeFirst();
+
+//        curvePlot->setData(QVector<double>(), QVector<double>());
+//        customPlot->replot();
+//    }
+
+
+//    if (ui->treeWidget->currentItem()->childCount())
+//    {
+//        for (int i = 0; i < CVCurves->size(); i++)
+//            if (ui->treeWidget->currentItem()->text(0) == CVCurves->at(i)->fileName())
+//            {
+//                delete CVCurves->takeAt(i);
+//                break;
+//            }
+
+//        if (CVCurves->isEmpty())
+//        {
+//            currentItemChangedSlot_deactivator = true;
+//            ui->treeWidget->takeTopLevelItem(0);
+//            curvePlot->setData(QVector<double>(), QVector<double>());
+//            customPlot->replot();
+//            currentItemChangedSlot_deactivator = false;
+//            return;
+//        }
+
+//        int itemIndex = ui->treeWidget->indexOfTopLevelItem(ui->treeWidget->currentItem());
+
+//        if (itemIndex == ui->treeWidget->topLevelItemCount() - 1)
+//            ui->treeWidget->setCurrentItem(ui->treeWidget->topLevelItem(itemIndex - 1));
+//        else
+//            ui->treeWidget->setCurrentItem(ui->treeWidget->topLevelItem(itemIndex + 1));
+
+//        ui->treeWidget->takeTopLevelItem(itemIndex);
+//    }
+//    else
+//    {
+//        QTreeWidgetItem *item = ui->treeWidget->currentItem();
+//        ui->treeWidget->setCurrentItem(item->parent());
+//        delete item;
+//    }
 }
 
 void MainWindow::clearTreeWidget()
 {
-    currentItemChangedSlot_deactivator = true;
+    QList<GraphData*> values = hashWithTreeItemsAndGraphData.values();
 
     while (!CVCurves->isEmpty())
         delete CVCurves->takeFirst();
 
+    while (!values.isEmpty())
+        delete values.takeFirst();
+
     while (ui->treeWidget->topLevelItemCount())
         ui->treeWidget->takeTopLevelItem(0);
+
+    hashWithTreeItemsAndGraphData.clear();
+    mapWithStacks.clear();
 
     curvePlot->setData(QVector<double>(), QVector<double>());
     customPlot->replot();
 
-    currentItemChangedSlot_deactivator = false;
+//    currentItemChangedSlot_deactivator = true;
+
+//    while (!CVCurves->isEmpty())
+//        delete CVCurves->takeFirst();
+
+//    while (ui->treeWidget->topLevelItemCount())
+//        ui->treeWidget->takeTopLevelItem(0);
+
+//    curvePlot->setData(QVector<double>(), QVector<double>());
+//    customPlot->replot();
+
+//    currentItemChangedSlot_deactivator = false;
 }
 
 void MainWindow::on_treeWidget_currentItemChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous)
 {
     if (previous == NULL) return;
+    if (current == NULL) return;
+    if (!hashWithTreeItemsAndGraphData.contains(previous)) return;
+    if (!hashWithTreeItemsAndGraphData.contains(current)) return;
     if (currentItemChangedSlot_deactivator) return;
 
-    // qDebug() << "/ current - " << current->text(0) << " // previous - " << previous->text(0) << " /";
-
-    if(previous->childCount())
-    {
-        for (QVector<CVCurveData*>::iterator it = CVCurves->begin(); it != CVCurves->end(); it++)
-        {
-            if (previous->text(0) == (*it)->fileName())
-            {
-                (*it)->axisRanges.remove(CVCurveData::PlotTypes.at(CVCurveData::I_vs_E));
-                (*it)->axisRanges.insert(CVCurveData::PlotTypes.at(CVCurveData::I_vs_E), Range(customPlot->xAxis->range().lower,
-                                                                                               customPlot->xAxis->range().upper,
-                                                                                               customPlot->yAxis->range().lower,
-                                                                                               customPlot->yAxis->range().upper));
-                break;
-            }
-
-        }
-    }
-    else
-    {
-        QString parentName = previous->parent()->text(0);
-        QString plotType = previous->text(0);
-        for (QVector<CVCurveData*>::iterator it = CVCurves->begin(); it != CVCurves->end(); it++)
-        {
-            if (parentName == (*it)->fileName())
-            {
-                (*it)->axisRanges.remove(plotType);
-                (*it)->axisRanges.insert(plotType, Range(customPlot->xAxis->range().lower,
-                                                         customPlot->xAxis->range().upper,
-                                                         customPlot->yAxis->range().lower,
-                                                         customPlot->yAxis->range().upper));
-                break;
-            }
-        }
-    }
+//    if (mapWithStacks.contains(previous))
+//    {
+//        treeWidgetItemPressed(current, 0);
+//        return;
+//    }
 
     treeWidgetItemPressed(current, 0);
+
+//    qDebug() << "/ current - " << current->text(0) << " // previous - " << previous->text(0) << " /";
+
+//    if(previous->childCount())
+//    {
+//        for (QVector<CVCurveData*>::iterator it = CVCurves->begin(); it != CVCurves->end(); it++)
+//        {
+//            if (previous->text(0) == (*it)->fileName())
+//            {
+//                (*it)->axisRanges.remove(CVCurveData::PlotTypes.at(CVCurveData::I_vs_E));
+//                (*it)->axisRanges.insert(CVCurveData::PlotTypes.at(CVCurveData::I_vs_E), Range(customPlot->xAxis->range().lower,
+//                                                                                               customPlot->xAxis->range().upper,
+//                                                                                               customPlot->yAxis->range().lower,
+//                                                                                               customPlot->yAxis->range().upper));
+//                break;
+//            }
+
+//        }
+//    }
+//    else
+//    {
+//        QString parentName = previous->parent()->text(0);
+//        QString plotType = previous->text(0);
+//        for (QVector<CVCurveData*>::iterator it = CVCurves->begin(); it != CVCurves->end(); it++)
+//        {
+//            if (parentName == (*it)->fileName())
+//            {
+//                (*it)->axisRanges.remove(plotType);
+//                (*it)->axisRanges.insert(plotType, Range(customPlot->xAxis->range().lower,
+//                                                         customPlot->xAxis->range().upper,
+//                                                         customPlot->yAxis->range().lower,
+//                                                         customPlot->yAxis->range().upper));
+//                break;
+//            }
+//        }
+//    }
+
 }
 
 void MainWindow::on_CrossButton_clicked()
@@ -1122,44 +1482,78 @@ void MainWindow::on_CrossButton_clicked()
         deactivateAllControlButtons();
 }
 
-
 void MainWindow::on_actionCreate_stack_triggered()
 {
-    if (ui->treeWidget->selectedItems().size() < 2)
+    QList<QTreeWidgetItem*> selectedItems = ui->treeWidget->selectedItems();
+
+    if (selectedItems.size() < 2)
     {
-        QMessageBox::warning(this, "Create stack [error]", "At least two files should be selected in the tree panel.\nUse CTRL button to select more than one file.");
+        QMessageBox::warning(this, "Create stack [error]", "At least two plots should be selected. Use CTRL button to select more than one plot.");
         return;
     }
 
-    QStringList selectedFileNames;
-    QStringList selectedFileParentsNames;
-    foreach (QTreeWidgetItem *item, ui->treeWidget->selectedItems()) {
-        selectedFileNames.append(item->text(0));
-        if (!item->childCount()) selectedFileParentsNames.append(item->parent()->text(0));
-    }
-
-    if (!selectedFileParentsNames.isEmpty()) //
-    {
-        if (selectedFileNames.size() != selectedFileParentsNames.size())
+    CVCurveData::PlotType plotType = hashWithTreeItemsAndGraphData.value(selectedItems.first())->plotType;
+    foreach (QTreeWidgetItem *item, selectedItems) {
+        if (hashWithTreeItemsAndGraphData.value(item)->plotType != plotType)
         {
-            QMessageBox::warning(this, "Create stack [error]", "Cannot create stack of plots having different types");
+            QMessageBox::warning(this, "Create stack [error]", "Cannot create stack of plots having different types!");
             return;
         }
-
-        for (int i = 0; i < selectedFileNames.size(); i++)
-        {
-            if (selectedFileNames.at(i) != selectedFileNames.at(0))
-            {
-                QMessageBox::warning(this, "Create stack [error]", "Cannot create stack of plots having different types");
-                return;
-            }
-        }
-
-        createPlotStack(selectedFileParentsNames, selectedFileNames.at(0));
     }
-    else
+
+    if (hashWithTreeItemsAndGraphData.value(selectedItems.first())->treeItemType == GraphData::SinglePlot)
     {
-        createPlotStack(selectedFileNames, CVCurveData::PlotTypes.at(CVCurveData::I_vs_E));
+        createPlotStack();
+        return;
     }
+    else if (hashWithTreeItemsAndGraphData.value(selectedItems.first())->treeItemType == GraphData::Stack)
+    {
+        QMessageBox::question(this, "WTF?", "Stack of stacks? Are you serious? Never do that again!");
+        return;
+    }
+    else if (hashWithTreeItemsAndGraphData.value(selectedItems.first())->treeItemType == GraphData::Folder)
+    {
+        QMessageBox::warning(this, "Create stack [error]", "Cannot create stack of folders");
+        return;
+    }
+
+//    QStringList selectedFileNames;
+//    QStringList selectedFileParentsNames;
+//    foreach (QTreeWidgetItem *item, ui->treeWidget->selectedItems()) {
+//        selectedFileNames.append(item->text(0));
+//        if (!item->childCount()) selectedFileParentsNames.append(item->parent()->text(0));
+//    }
+
+//    ui->treeWidget->clearSelection();
+
+//    if (!selectedFileParentsNames.isEmpty()) //
+//    {
+//        if (selectedFileNames.size() != selectedFileParentsNames.size())
+//        {
+//            QMessageBox::warning(this, "Create stack [error]", "Cannot create stack of plots having different types");
+//            return;
+//        }
+
+//        for (int i = 0; i < selectedFileNames.size(); i++)
+//        {
+//            if (selectedFileNames.at(i) != selectedFileNames.at(0))
+//            {
+//                QMessageBox::warning(this, "Create stack [error]", "Cannot create stack of plots having different types");
+//                return;
+//            }
+//        }
+
+//        createPlotStack(selectedFileParentsNames, selectedFileNames.at(0));
+//    }
+//    else
+//    {
+//        createPlotStack(selectedFileNames, CVCurveData::PlotTypes.at(CVCurveData::I_vs_E));
+//    }
+}
+void MainWindow::on_SaveViewButton_clicked()
+{
+    QTreeWidgetItem *currentItem = ui->treeWidget->currentItem();
+    hashWithTreeItemsAndGraphData.value(currentItem)->setXRange(customPlot->xAxis->range());
+    hashWithTreeItemsAndGraphData.value(currentItem)->setYRange(customPlot->yAxis->range());
 }
 

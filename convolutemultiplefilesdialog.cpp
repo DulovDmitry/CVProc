@@ -1,14 +1,14 @@
 #include "convolutemultiplefilesdialog.h"
 #include "ui_convolutemultiplefilesdialog.h"
 
-ConvoluteMultipleFilesDialog::ConvoluteMultipleFilesDialog(QStringList *namesList, QWidget *parent) :
+ConvoluteMultipleFilesDialog::ConvoluteMultipleFilesDialog(QList<QTreeWidgetItem*> treeItemsList, QWidget *parent) :
     QDialog(parent),
     ui(new Ui::ConvoluteMultipleFilesDialog)
 {
     ui->setupUi(this);
     this->setWindowTitle("Convolution");
 
-    fileNamesList = namesList;
+    parentsTreeItems = treeItemsList;
 
     fillListWidget();
 
@@ -23,13 +23,25 @@ ConvoluteMultipleFilesDialog::~ConvoluteMultipleFilesDialog()
 
 void ConvoluteMultipleFilesDialog::fillListWidget()
 {
-    for (int i = 0; i < fileNamesList->size(); i++)
+    foreach(QTreeWidgetItem *treeItem, parentsTreeItems)
     {
-        QListWidgetItem *item = new QListWidgetItem(fileNamesList->at(i), ui->listWidget);
+        QListWidgetItem *item = new QListWidgetItem(treeItem->text(0), ui->listWidget);
         item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
         item->setCheckState(Qt::Unchecked);
 
         ui->listWidget->addItem(item);
+        mapWithListItemsAndTreeItems.insert(item, treeItem);
+    }
+}
+
+void ConvoluteMultipleFilesDialog::fillSelectedTreeItemsList()
+{
+    for (int i = 0; i < ui->listWidget->count(); i++)
+    {
+        if (ui->listWidget->item(i)->checkState() == Qt::Checked)
+        {
+            selectedTreeItems.append(mapWithListItemsAndTreeItems.value(ui->listWidget->item(i)));
+        }
     }
 }
 
@@ -56,5 +68,13 @@ void ConvoluteMultipleFilesDialog::on_SelectAllButton_clicked()
             ui->listWidget->item(i)->setCheckState(Qt::Unchecked);
         ui->SelectAllButton->setText("Select all");
     }
+}
+
+
+void ConvoluteMultipleFilesDialog::on_ConvoluteButton_clicked()
+{
+    fillSelectedTreeItemsList();
+    this->hide();
+    emit convoluteButtonClicked(selectedTreeItems);
 }
 

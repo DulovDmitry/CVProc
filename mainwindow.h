@@ -4,9 +4,14 @@
 #include <QMainWindow>
 #include <QFileDialog>
 #include <QDebug>
+#include <QSplitter>
+#include <QSplashScreen>
+#include <QThread>
+#include <QtConcurrent>
+#include <QFuture>
 
-#include "qcustomplot.h"
-#include "cvcurvedata.h"
+#include <ctime>
+
 #include "smoothsettingsdialog.h"
 #include "convolutionsettingsdialog.h"
 #include "generalsettingsdialog.h"
@@ -15,11 +20,14 @@
 #include "showdatadialog.h"
 #include "convolutionstatusbardialog.h"
 
+#include "qcustomplot.h"
+#include "cvcurvedata.h"
+#include "graphdata.h"
+#include "gradientcolor.h"
+
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
-
-class GraphData;
 
 class MainWindow : public QMainWindow
 {
@@ -28,6 +36,12 @@ class MainWindow : public QMainWindow
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
+
+    QString IAxisCaption;
+    QString EAxisCaption;
+    QString TAxisCaption;
+    QString IsiAxisCaption;
+    QString IsdAxisCaption;
 
 private slots:
 
@@ -63,9 +77,10 @@ private slots:
     void on_ConvolutionButton_clicked();
     void on_SmoothButton_clicked();
     void on_CrossButton_clicked();
+    void on_SaveViewButton_clicked();
 
     // graph control:
-    void drawPlot(CVCurveData *CVData, QString plotType);
+    void drawPlot(QTreeWidgetItem *item);
     void applyGraphicalSettings();
     void plotDoubleClicked(QMouseEvent* event);
     void axisLabelDoubleClicked(QCPAxis *axis, QCPAxis::SelectablePart part, QMouseEvent *event);
@@ -88,20 +103,25 @@ private slots:
 
     // Other methods and slots
     void SavGolFilterApply(int m, int pol_order);
-    void convolutionApply(int Ru, int Cd);
+    void convolutionApply(QTreeWidgetItem *currentItem);
     void smoothSettingsDialogWasClosed(bool buttonType);
-    void createPlotStack(QStringList fileNames, QString plotType);
-    void getGraphDataFromCVDataAndPlotType(CVCurveData *CVData, QString plotType);
+    void createPlotStack();
+    QCPRange findMaximalQCPRange(QList<QCPRange> ranges);
+    void generalSettingsDialogClosed();
+    void convoluteMultipleFiles(QList<QTreeWidgetItem*> itemsForConvolutionList);
+
+    //void getGraphDataFromCVDataAndPlotType(CVCurveData *CVData, QString plotType);
 
 private:
     Ui::MainWindow *ui;
     QVector<CVCurveData*> *CVCurves;
     QSettings *settings;
-    QThread *CVCurveDataThread;
-    GraphData *graphData;
+    QHash<QTreeWidgetItem*, GraphData*> hashWithTreeItemsAndGraphData;
 
-    QString fileNameBuffer;
+    // QString fileNameBuffer;
     QStringList fileNamesListFromTreeWidget;
+
+    QThread *thread_convolutionStatusBarDialog;
 
     // Flags
     bool currentItemChangedSlot_deactivator = false;
@@ -161,16 +181,4 @@ private:
 
 };
 
-class GraphData
-{
-public:
-    GraphData() { qDebug() << "GraphData constructor"; }
-    ~GraphData() { qDebug() << "GraphData destructor"; }
-
-    QString xAxisCaption;
-    QString yAxisCaption;
-    QVector<double> xValues;
-    QVector<double> yValues;
-
-};
 #endif // MAINWINDOW_H

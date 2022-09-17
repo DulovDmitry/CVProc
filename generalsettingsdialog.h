@@ -55,6 +55,7 @@ private slots:
 
 signals:
     void applyButtonClicked();
+    void OKButtonClicked();
 
 private:
     Ui::GeneralSettingsDialog *ui;

@@ -2,5 +2,6 @@
     <qresource prefix="/new/prefix1">
         <file alias="hintIcon.ico">Graphics/hintIcon.ico</file>
         <file alias="mainIcon.ico">Graphics/mainIcon.ico</file>
+        <file alias="splashScreen">Graphics/splashScreen.png</file>
     </qresource>
 </RCC>

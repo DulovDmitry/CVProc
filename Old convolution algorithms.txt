@@ -1,0 +1,70 @@
+double currentSum = 0;
+unsigned long int numberOfSteps = (I.size() - 1) * (I.size() - 2) / 2;
+unsigned long int currentStep = 0;
+double deltaT = mT.last()/mT.size();
+
+
+
+for (int i = 1; i < I.size(); i++)
+    {
+// Algorithm #2
+       currentSum = 0;
+       for (int k = 0; k <= i; k++)
+       {
+           currentSum += ((I[k+2])/sqrt(mT[i+2] - mT[k]) + (I[k+2])/sqrt(mT[i+2] - mT[k+1])) * (mT[k+1] - mT[k]) / 2;
+           currentStep++;
+       }
+       currentSum /= sqrt(M_PI);
+       this->mIsi.append(currentSum);
+
+       emit progressWasChanged((int)100*currentStep/numberOfSteps);
+
+// Algorithm #3
+       currentSum = 0;
+       for (int k = 0; k <= i; k++)
+       {
+           if (i == k)
+           {
+               currentSum += ((I[k])/sqrt(mT[i+1] - mT[k]) + (alpha*I[k+1] + (1-alpha)*I[k])/sqrt(mT[i+1] - (1-alpha)*mT[k] + alpha*mT[k+1])) * (mT[k+1] - mT[k])*alpha / 2;
+               currentStep++;
+               break;
+           }
+           currentSum += ((I[k])/sqrt(mT[i+1] - mT[k]) + (I[k+1])/sqrt(mT[i+1] - mT[k+1])) * (mT[k+1] - mT[k]) / 2;
+           currentStep++;
+       }
+       currentSum /= sqrt(M_PI);
+       this->mIsi.append(currentSum);
+
+       emit progressWasChanged((int)100*currentStep/numberOfSteps);
+
+// Algorithm #4
+       currentSum = 0;
+       for (int k = 1; k <= i; k++)
+       {
+           if (i == k)
+           {
+               currentSum += ((I[k-1])/sqrt(mT[i+1] - mT[k-1]) + 4*(I[k])/sqrt(mT[i+1] - mT[k]) + (alpha*I[k+1] + (1-alpha)*I[k])/sqrt(mT[i+1] - (1-alpha)*mT[k] + alpha*mT[k+1])) * (mT[k+1] - mT[k-1])*alpha / 12;
+               currentStep++;
+               break;
+           }
+           currentSum += ((I[k-1])/sqrt(mT[i+1] - mT[k-1]) + 4*(I[k])/sqrt(mT[i+1] - mT[k]) + (I[k+1])/sqrt(mT[i+1] - mT[k+1])) * (mT[k+1] - mT[k-1]) / 12;
+           currentStep++;
+       }
+       currentSum /= sqrt(M_PI);
+       this->mIsi.append(currentSum);
+
+       emit progressWasChanged((int)100*currentStep/numberOfSteps);
+
+// Algorithm #5 (from book)
+        currentSum = 0;
+        for (int k = 1; k <= i; k++)
+        {
+            currentSum += (I[k-1] + I[k])/2 * sqrt(deltaT) / sqrt(i - k + 0.5);
+            currentStep++;
+        }
+        currentSum /= sqrt(M_PI);
+        this->mIsi.append(currentSum);
+
+        emit progressWasChanged(100*currentStep/numberOfSteps);
+
+    }

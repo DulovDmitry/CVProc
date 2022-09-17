@@ -3,8 +3,10 @@
 
 #include <QDialog>
 #include <QListWidgetItem>
+#include <QTreeWidget>
 
 #include "cvcurvedata.h"
+#include "graphdata.h"
 
 namespace Ui {
 class SmoothMultipleFilesDialog;
@@ -15,7 +17,7 @@ class SmoothMultipleFilesDialog : public QDialog
     Q_OBJECT
 
 public:
-    explicit SmoothMultipleFilesDialog(QVector<CVCurveData*> *vector, QStringList *fileNames, QWidget *parent = nullptr);
+    explicit SmoothMultipleFilesDialog(QHash<QTreeWidgetItem*, GraphData*> *_hash, QWidget *parent = nullptr);
     ~SmoothMultipleFilesDialog();
 
 private slots:

@@ -2,6 +2,8 @@
 #define CONVOLUTIONSTATUSBARDIALOG_H
 
 #include <QDialog>
+#include <QThread>
+#include <QDebug>
 
 namespace Ui {
 class ConvolutionStatusBarDialog;
@@ -14,7 +16,9 @@ class ConvolutionStatusBarDialog : public QDialog
 public:
     explicit ConvolutionStatusBarDialog(QWidget *parent = nullptr);
     ~ConvolutionStatusBarDialog();
-    void updateProgressBar(int progress);
+
+public slots:
+    void progressBarUpdate(int progress);
     void setFileName(QString filename);
 
 private:
