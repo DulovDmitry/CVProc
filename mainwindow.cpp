@@ -27,8 +27,8 @@ MainWindow::MainWindow(QWidget *parent)
     ui->CrossButton->setCheckable(true);
     ui->DeleteDataButton->setEnabled(false);
     ui->AnalyzePeakButton->setEnabled(false);
-    ui->progressBar->setStyleSheet("QProgressBar {border: 2px solid grey; border-radius: 10px; text-align: center;}");
-    ui->progressBar->setStyleSheet("QProgressBar::chunk {background-color: #05B8CC; width: 1px;}");
+    //ui->progressBar->setStyleSheet("QProgressBar {border: 2px solid grey; border-radius: 10px; text-align: center;}");
+    //ui->progressBar->setStyleSheet("QProgressBar::chunk {background-color: #05B8CC; width: 1px;}");
     ui->splitter_2->setSizes(QList<int>() << 300 << 4000);
     ui->splitter->setSizes(QList<int>() << 2000 << 200);
 
@@ -341,7 +341,7 @@ void MainWindow::on_actionImport_ASCII_triggered()
 
             ui->treeWidget->addTopLevelItem(item);
 
-            ui->plainTextEdit->appendPlainText("The file " + file.fileName() + " has been imported\n"
+            ui->plainTextEdit->appendPlainText("The file \"" + file.fileName() + "\" has been imported\n"
                                                "Size: " + QString::number(file.size()) + " bytes\n"
                                                "Number of lines: " + QString::number(CVCurves->last()->numberOfLinesInFileBody()) + "\n"
                                                "Number of data points: " + QString::number(CVCurves->last()->sizeOfE()) + "\n"
@@ -430,7 +430,7 @@ void MainWindow::convolutionApply(QTreeWidgetItem *currentItem)
 
         convolutionStatusBarDialog->close();
 
-        ui->plainTextEdit->appendPlainText("Convolution of \"" + currentItem->text(0) + "\" completed in " + QString::number((double)exec_time/1000.0) + " seconds.");
+        ui->plainTextEdit->appendPlainText("Convolution of \"" + currentItem->text(0) + "\" has been completed in " + QString::number((double)exec_time/1000.0) + " seconds.");
         ui->plainTextEdit->appendPlainText("Convolution parameters:");
         ui->plainTextEdit->appendPlainText("\tRu = " + QString::number(generalSettingsDialog->RuDefaultValue));
         ui->plainTextEdit->appendPlainText("\tCd = " + QString::number(generalSettingsDialog->CdDefaultValue) + "\n");
@@ -583,11 +583,8 @@ void MainWindow::on_DefaultViewButton_clicked()
 
 void MainWindow::treeWidgetItemPressed(QTreeWidgetItem *item, int column)
 {
-    ui->ConvolutionButton->setEnabled(false);
     CVCurveData::PlotType plotType = hashWithTreeItemsAndGraphData.value(item)->plotType;
-    if (plotType == CVCurveData::I_vs_E || plotType == CVCurveData::I_vs_E_smoothed)
-        ui->ConvolutionButton->setEnabled(true);
-
+    ui->ConvolutionButton->setEnabled(plotType == CVCurveData::I_vs_E || plotType == CVCurveData::I_vs_E_smoothed);
 
     drawPlot(item);
 
@@ -649,6 +646,8 @@ void MainWindow::treeContextMenuRequested(QPoint pos)
         showInExplorer->setDisabled(true);
         exportTXT->setDisabled(true);
         deleteItem->setDisabled(true);
+        showData->setDisabled(true);
+        convolute->setDisabled(true);
     }
     else
     {
@@ -656,6 +655,8 @@ void MainWindow::treeContextMenuRequested(QPoint pos)
         showInExplorer->setDisabled(false);
         exportTXT->setDisabled(false);
         deleteItem->setDisabled(false);
+        showData->setDisabled(false);
+        convolute->setDisabled(true);
 
         if (!ui->treeWidget->itemAt(pos)->childCount())
         {
@@ -689,10 +690,10 @@ void MainWindow::showCVDataInDialog()
     }
 }
 
-void MainWindow::progressBarUpdate(int progress)
-{
-    ui->progressBar->setValue(progress);
-}
+//void MainWindow::progressBarUpdate(int progress)
+//{
+//    ui->progressBar->setValue(progress);
+//}
 
 void MainWindow::plotDoubleClicked(QMouseEvent* event)
 {
@@ -1488,7 +1489,7 @@ void MainWindow::on_actionCreate_stack_triggered()
 
     if (selectedItems.size() < 2)
     {
-        QMessageBox::warning(this, "Create stack [error]", "At least two plots should be selected. Use CTRL button to select more than one plot.");
+        QMessageBox::warning(this, "Create stack [error]", "At least two plots should be selected.\nUse CTRL button to select more than one plot.");
         return;
     }
 

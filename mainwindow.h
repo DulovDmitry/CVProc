@@ -24,7 +24,7 @@
 #include "cvcurvedata.h"
 #include "graphdata.h"
 #include "gradientcolor.h"
-#include "build.h"
+//#include "build.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -58,7 +58,7 @@ private slots:
     void deleteSingleTreeWidgetItem();
     void clearTreeWidget();
     void updateFileNamesListFromTreeWidget();
-    void progressBarUpdate(int progress);
+    //void progressBarUpdate(int progress);
 
     // Plot context menu control
     void initializePlotContextMenu();

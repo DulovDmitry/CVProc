@@ -78,3 +78,9 @@ void ConvoluteMultipleFilesDialog::on_ConvoluteButton_clicked()
     emit convoluteButtonClicked(selectedTreeItems);
 }
 
+
+void ConvoluteMultipleFilesDialog::on_CancelButton_clicked()
+{
+    this->hide();
+}
+

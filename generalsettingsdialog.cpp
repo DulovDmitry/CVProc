@@ -65,16 +65,16 @@ void GeneralSettingsDialog::loadSettings()
     potentialAxisCaption = settings->value("POTENTIAL_AXIS_CAPTION", "E").toString();
 
     // Graphics settings
-    curveColorName = settings->value("CURVE_COLOR", "#000000").toString();
-    selectionColorName = settings->value("SELECTION_COLOR", "#000000").toString();
-    smoothColorName = settings->value("SMOOTH_COLOR", "#000000").toString();
+    curveColorName = settings->value("CURVE_COLOR", "#0000ff").toString();
+    selectionColorName = settings->value("SELECTION_COLOR", "#00ff7f").toString();
+    smoothColorName = settings->value("SMOOTH_COLOR", "#ff00ff").toString();
     ticksIn = settings->value("TICKS_IN", false).toBool();
     gridIsVisible = settings->value("GRID_IS_VISIBLE", true).toBool();
     plotLineWidth = settings->value("PLOT_LINE_WIDTH", 2).toInt();
-    axisWidth = settings->value("AXIS_WIDTH", 1.5).toDouble();
+    axisWidth = settings->value("AXIS_WIDTH", 1.0).toDouble();
     curveMargin = settings->value("CURVE_MARGIN", 0.07).toDouble();
     axisFontSize = settings->value("AXIS_FONT_SIZE", 12).toInt();
-    axisFontFamily = settings->value("AXIS_FONT_FAMILY", "Arial").toString();
+    axisFontFamily = settings->value("AXIS_FONT_FAMILY", "Century Gothic").toString();
 
     // Export settings
 
