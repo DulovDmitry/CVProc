@@ -24,6 +24,7 @@
 #include "cvcurvedata.h"
 #include "graphdata.h"
 #include "gradientcolor.h"
+#include "build.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }

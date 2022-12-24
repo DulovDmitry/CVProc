@@ -20,7 +20,7 @@ MainWindow::MainWindow(QWidget *parent)
     ui->actionAdd_data_manually->setEnabled(false);
     ui->actionSave_file->setEnabled(false);
     ui->actionImport_CVProc_file->setEnabled(false);
-    
+
     // Appearance configuration
     ui->checkBox_particularCycle->setEnabled(false);
     ui->spinBox_numberOfCycle->setEnabled(false);
