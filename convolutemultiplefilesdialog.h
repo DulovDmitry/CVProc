@@ -27,6 +27,8 @@ private slots:
     void on_SelectAllButton_clicked();
     void on_ConvoluteButton_clicked();
 
+    void on_CancelButton_clicked();
+
 private:
     // methods
     void fillListWidget();

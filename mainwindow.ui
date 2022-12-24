@@ -366,7 +366,7 @@
              <item>
               <widget class="QCheckBox" name="checkBox_particularCycle">
                <property name="text">
-                <string>Show particular cycle</string>
+                <string>Show cycle</string>
                </property>
               </widget>
              </item>
@@ -497,6 +497,9 @@
    </property>
   </action>
   <action name="actionAbout_CVProc">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
    <property name="text">
     <string>About CVProc</string>
    </property>
@@ -512,11 +515,17 @@
    </property>
   </action>
   <action name="actionGraphic_settings">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
    <property name="text">
     <string>Graphic settings</string>
    </property>
   </action>
   <action name="actionExport_settings">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
    <property name="text">
     <string>Export settings</string>
    </property>
